@@ -93,53 +93,129 @@ func AddPhrase(c *gin.Context, db *gorm.DB) {
 
 // update phrase click counts
 func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
-	var latestClickedPhrases []latestClickedPhrase
+	// var latestClickedPhrases []latestClickedPhrase
 
 	// bind json
-	if err := c.ShouldBindJSON(&latestClickedPhrases); err != nil {
-		c.AbortWithStatusJSON(
-			http.StatusInternalServerError,
-			gin.H{"error": err.Error()})
-		return
+	// if err := c.ShouldBindJSON(&latestClickedPhrases); err != nil {
+	// 	c.AbortWithStatusJSON(
+	// 		http.StatusInternalServerError,
+	// 		gin.H{"error": err.Error()})
+	// 	return
+	// }
+
+	// fmt.Printf("Res %v", latestClickedPhrases)
+	// for _, phrase := range latestClickedPhrases {
+	// 	var resDB mock.PhraseModel
+	// 	phrase_id := phrase.PhraseID
+	// 	clicks := phrase.Clicks
+	// 	open_id := phrase.OpenID
+	// 	group_id := phrase.GroupID
+
+	// 	fmt.Printf("phrase %v\n %v\n %v\n %v\n", phrase_id, clicks, open_id, group_id)
+
+	// 	res := db.Table("phrase_models").Where(&mock.PhraseModel{PhraseID: phrase_id}).Find(&resDB)
+
+	// 	fmt.Printf("res.RowsAffected %v\n", res.RowsAffected)
+
+	// 	if res.RowsAffected > 0 {
+	// 		res1 := db.Create(&mock.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now()})
+	// 		if res1.Error != nil {
+	// 			fmt.Printf("Error %v", res1.Error)
+	// 		}
+	// 	}
+	// }
+
+	// type Result struct {
+	// 	GroupID  int `json:"group_id"`
+	// 	PhraseID int `json:"phrase_id"`
+	// 	Clicks   int `json:"clicks"`
+	// }
+
+	// var resultList []Result
+
+	// db.Table("phrase_click_models").Select("phrase_id, group_id, sum(clicks) as clicks").Group("phrase_id, group_id").Order("clicks desc").Scan(&resultList)
+
+	// fmt.Printf("result %v\n %v\n", resultList, len(resultList))
+
+	type Return struct {
+		PhraseID      int    `json:"phrase_id"`
+		Text          string `json:"text"`
+		HotGroupID    int    `json:"hot_group_id"`
+		HotGroupClick int    `json:"hot_group_clicks"`
+		Clicks        int    `json:"clicks"`
+		UpdateTime    int64  `json:"update_time"`
 	}
 
-	fmt.Printf("Res %v", latestClickedPhrases)
-	for _, phrase := range latestClickedPhrases {
-		var resDB mock.PhraseModel
-		phrase_id := phrase.PhraseID
-		clicks := phrase.Clicks
-		open_id := phrase.OpenID
-		group_id := phrase.GroupID
-
-		fmt.Printf("phrase %v\n %v\n %v\n %v\n", phrase_id, clicks, open_id, group_id)
-
-		res := db.Table("phrase_models").Where(&mock.PhraseModel{PhraseID: phrase_id}).Find(&resDB)
-
-		fmt.Printf("res.RowsAffected %v\n", res.RowsAffected)
-
-		if res.RowsAffected > 0 {
-			res1 := db.Create(&mock.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now()})
-			if res1.Error != nil {
-				fmt.Printf("Error %v", res1.Error)
-			}
-		}
+	mockReturn := []Return{
+		{
+			PhraseID:      1,
+			Text:          "tidb1",
+			HotGroupID:    3,
+			HotGroupClick: 40,
+			Clicks:        100,
+			UpdateTime:    time.Now().Unix(),
+		},
+		{
+			PhraseID:      2,
+			Text:          "tidb2",
+			HotGroupID:    2,
+			HotGroupClick: 45,
+			Clicks:        120,
+			UpdateTime:    time.Now().Unix(),
+		},
+		{
+			PhraseID:      3,
+			Text:          "tidb3",
+			HotGroupID:    2,
+			HotGroupClick: 10,
+			Clicks:        80,
+			UpdateTime:    time.Now().Unix(),
+		},
+		{
+			PhraseID:      4,
+			Text:          "tidb4",
+			HotGroupID:    8,
+			HotGroupClick: 49,
+			Clicks:        100,
+			UpdateTime:    time.Now().Unix(),
+		},
+		{
+			PhraseID:      5,
+			Text:          "tidb5",
+			HotGroupID:    3,
+			HotGroupClick: 40,
+			Clicks:        100,
+			UpdateTime:    time.Now().Unix(),
+		},
+		{
+			PhraseID:      6,
+			Text:          "tidb6",
+			HotGroupID:    2,
+			HotGroupClick: 20,
+			Clicks:        60,
+			UpdateTime:    time.Now().Unix(),
+		},
+		{
+			PhraseID:      7,
+			Text:          "tidb7",
+			HotGroupID:    5,
+			HotGroupClick: 25,
+			Clicks:        80,
+			UpdateTime:    time.Now().Unix(),
+		},
+		{
+			PhraseID:      8,
+			Text:          "tidb8",
+			HotGroupID:    1,
+			HotGroupClick: 15,
+			Clicks:        30,
+			UpdateTime:    time.Now().Unix(),
+		},
 	}
-
-	type Result struct {
-		GroupID  int `json:"group_id"`
-		PhraseID int `json:"phrase_id"`
-		Clicks   int `json:"clicks"`
-	}
-
-	var resultList []Result
-
-	db.Table("phrase_click_models").Select("phrase_id, group_id, sum(clicks) as clicks").Group("phrase_id, group_id").Order("clicks desc").Scan(&resultList)
-
-	fmt.Printf("result %v\n %v\n", resultList, len(resultList))
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
-		"d": "",
+		"d": mockReturn,
 		"m": "",
 	})
 }
