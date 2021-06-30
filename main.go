@@ -1,8 +1,9 @@
 package main
 
 import (
-	"./api"
-	"./utils"
+	"github.com/YiniXu9506/devconG/api"
+	"github.com/YiniXu9506/devconG/utils"
+
 	"github.com/gin-gonic/gin"
 )
 

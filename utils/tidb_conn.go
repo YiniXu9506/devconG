@@ -1,7 +1,8 @@
 package utils
 
 import (
-	"../mock"
+	"github.com/YiniXu9506/devconG/mock"
+
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )

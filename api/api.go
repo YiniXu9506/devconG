@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"../mock"
-	"../utils"
+	"github.com/YiniXu9506/devconG/mock"
+	"github.com/YiniXu9506/devconG/utils"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -126,9 +126,9 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 	}
 
 	type Result struct {
-		GroupID int `json:"group_id"`
-		PhraseID int	`json:"phrase_id"`
-		Clicks int	`json:"clicks"`
+		GroupID  int `json:"group_id"`
+		PhraseID int `json:"phrase_id"`
+		Clicks   int `json:"clicks"`
 	}
 
 	var resultList []Result
