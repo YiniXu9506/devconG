@@ -32,15 +32,18 @@ type latestClickedPhrase struct {
 func GetPhrases(c *gin.Context, db *gorm.DB) {
 	var phraseList []phrase
 	const defaultLimit = "20"
-	limit, err := strconv.Atoi(c.DefaultPostForm("limit", defaultLimit))
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
+
 	if err != nil {
 		fmt.Printf("failed to convert string to int")
 		limit = 100
 	}
+
 	res := db.Table("phrase_models").Select("phrase_id", "text", "hot_group_id", "hot_group_clicks", "clicks").Limit(limit).Find(&phraseList)
 	if res.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"m": "not found",
+			"c": "1",
+			"m": "Fetch all phrases failed",
 		})
 		return
 	}
@@ -53,22 +56,22 @@ func GetPhrases(c *gin.Context, db *gorm.DB) {
 
 // add a new phrase
 func AddPhrase(c *gin.Context, db *gorm.DB) {
-	var resDB model.PhraseModel
 	text := c.PostForm("text")
 	open_id := c.PostForm("open_id")
 	group_id, _ := strconv.Atoi(c.PostForm("group_id"))
+
+	// check text maxium length
 	isValidate := utils.ValidateText(text)
 
-	fmt.Printf("text %v\n", text)
-	res := db.Where(&model.PhraseModel{Text: text}).Find(&resDB)
-
-	fmt.Printf("RowsAffected %v", res.RowsAffected)
+	// check text unique
+	var phrase model.PhraseModel
+	findRes := db.Where(&model.PhraseModel{Text: text}).Find(&phrase)
 
 	if isValidate {
-		if res.RowsAffected == 0 {
-			res1 := db.Create(&model.PhraseModel{Text: text, OpenID: open_id, GroupID: group_id})
-			if res1.Error != nil {
-				fmt.Printf("Error %v", res1.Error)
+		if findRes.RowsAffected == 0 {
+			ceateRes := db.Create(&model.PhraseModel{Text: text, OpenID: open_id, GroupID: group_id})
+			if ceateRes.Error != nil {
+				fmt.Printf("Insert new phrase failed, %v", ceateRes.Error)
 			}
 
 			c.JSON(http.StatusOK, gin.H{
@@ -145,7 +148,6 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
-	fmt.Printf("Res %v", latestClickedPhrases)
 	var phraseIDs []int
 	for _, phrase := range latestClickedPhrases {
 		var resDB model.PhraseModel
@@ -154,8 +156,6 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 		clicks := phrase.Clicks
 		open_id := phrase.OpenID
 		group_id := phrase.GroupID
-
-		fmt.Printf("phrase %v\n %v\n %v\n %v\n", phrase_id, clicks, open_id, group_id)
 
 		res := db.Table("phrase_models").Where(&model.PhraseModel{PhraseID: phrase_id}).Find(&resDB)
 
@@ -166,18 +166,6 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 			}
 		}
 	}
-
-	// type Result struct {
-	// 	GroupID  int `json:"group_id"`
-	// 	PhraseID int `json:"phrase_id"`
-	// 	Clicks   int `json:"clicks"`
-	// }
-
-	// var resultList []Result
-
-	// db.Table("phrase_click_models").Select("phrase_id, group_id, sum(clicks) as clicks").Group("phrase_id, group_id").Order("clicks desc").Scan(&resultList)
-
-	// fmt.Printf("result %v\n %v\n", resultList, len(resultList))
 
 	type Return struct {
 		PhraseID       int    `json:"phrase_id"`
@@ -195,72 +183,6 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 			res = append(res, item)
 		}
 	}
-	// modelReturn := []Return{
-	// 	{
-	// 		PhraseID:      1,
-	// 		Text:          "tidb1",
-	// 		HotGroupID:    3,
-	// 		HotGroupClick: 40,
-	// 		Clicks:        100,
-	// 		UpdateTime:    time.Now().Unix(),
-	// 	},
-	// 	{
-	// 		PhraseID:      2,
-	// 		Text:          "tidb2",
-	// 		HotGroupID:    2,
-	// 		HotGroupClick: 45,
-	// 		Clicks:        120,
-	// 		UpdateTime:    time.Now().Unix(),
-	// 	},
-	// 	{
-	// 		PhraseID:      3,
-	// 		Text:          "tidb3",
-	// 		HotGroupID:    2,
-	// 		HotGroupClick: 10,
-	// 		Clicks:        80,
-	// 		UpdateTime:    time.Now().Unix(),
-	// 	},
-	// 	{
-	// 		PhraseID:      4,
-	// 		Text:          "tidb4",
-	// 		HotGroupID:    8,
-	// 		HotGroupClick: 49,
-	// 		Clicks:        100,
-	// 		UpdateTime:    time.Now().Unix(),
-	// 	},
-	// 	{
-	// 		PhraseID:      5,
-	// 		Text:          "tidb5",
-	// 		HotGroupID:    3,
-	// 		HotGroupClick: 40,
-	// 		Clicks:        100,
-	// 		UpdateTime:    time.Now().Unix(),
-	// 	},
-	// 	{
-	// 		PhraseID:      6,
-	// 		Text:          "tidb6",
-	// 		HotGroupID:    2,
-	// 		HotGroupClick: 20,
-	// 		Clicks:        60,
-	// 		UpdateTime:    time.Now().Unix(),
-	// 	},
-	// 	{
-	// 		PhraseID:      7,
-	// 		Text:          "tidb7",
-	// 		HotGroupID:    5,
-	// 		HotGroupClick: 25,
-	// 		Clicks:        80,
-	// 		UpdateTime:    time.Now().Unix(),
-	// 	},
-	// 	{
-	// 		PhraseID:      8,
-	// 		Text:          "tidb8",
-	// 		HotGroupID:    1,
-	// 		HotGroupClick: 15,
-	// 		Clicks:        30,
-	// 		UpdateTime:    time.Now().Unix(),
-	// 	},
-	// }
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
