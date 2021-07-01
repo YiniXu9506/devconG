@@ -1,8 +1,7 @@
 package utils
 
 import (
-	"github.com/YiniXu9506/devconG/mock"
-
+	"github.com/YiniXu9506/devconG/model"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -15,11 +14,11 @@ func TiDBConnect() *gorm.DB {
 		panic("failed to connect database")
 	}
 
-	db.AutoMigrate(&mock.PhraseClickModel{}, &mock.PhraseModel{})
+	db.AutoMigrate(&model.PhraseClickModel{}, &model.PhraseModel{})
 
-	// mock.MockPhraseClick(100, db)
+	// model.MockPhraseClick(100, db)
 
-	// mock.MockPhrase(50, db)
+	// model.MockPhrase(50, db)
 
 	return db
 }

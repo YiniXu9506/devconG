@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/YiniXu9506/devconG/api"
 	"github.com/YiniXu9506/devconG/utils"
 
@@ -23,6 +25,6 @@ func main() {
 	r.POST("/phrase_hot", func(c *gin.Context) {
 		api.UpdateClickedPhrase(c, db)
 	})
-
+	go api.UpdateStats(context.Background(), db)
 	r.Run()
 }

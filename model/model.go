@@ -1,4 +1,4 @@
-package mock
+package model
 
 import (
 	"time"
@@ -24,4 +24,5 @@ type PhraseModel struct {
 	Clicks         int       `json:"clicks"`
 	HotGroupID     int       `json:"hot_group_id"`
 	HotGroupClicks int       `json:"hot_group_clicks"`
+	UpdateTime     int64     `json: "update_time"`
 }

@@ -1,4 +1,4 @@
-package mock
+package model
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ func MockPhraseClick(n int, db *gorm.DB) {
 			ID:        i,
 			GroupID:   rand.Intn(5) + 1,
 			OpenID:    fmt.Sprintf("%d", (rand.Intn(5)+1)*100),
-			PhraseID:  rand.Intn(50),
+			PhraseID:  i,
 			Clicks:    rand.Intn(100),
 			ClickTime: time.Now(),
 		}
