@@ -28,10 +28,16 @@ type latestClickedPhrase struct {
 	GroupID  int    `json:"group_id"`
 }
 
+type newPhrase struct {
+	Text string `json:"text"`
+	OpenID string `json:"open_id"`
+	GroupID int `json:"group_id"`
+}
+
 // get all phrases
 func GetPhrases(c *gin.Context, db *gorm.DB) {
 	var phraseList []phrase
-	const defaultLimit = "20"
+	const defaultLimit = "100"
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
 
 	if err != nil {
@@ -39,10 +45,13 @@ func GetPhrases(c *gin.Context, db *gorm.DB) {
 		limit = 100
 	}
 
+	// TODD: calculate hot phrase group_id and clicks from phrase_clicks_models
+
 	res := db.Table("phrase_models").Select("phrase_id", "text", "hot_group_id", "hot_group_clicks", "clicks").Limit(limit).Find(&phraseList)
 	if res.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"c": "1",
+			"d": "",
 			"m": "Fetch all phrases failed",
 		})
 		return
@@ -56,20 +65,25 @@ func GetPhrases(c *gin.Context, db *gorm.DB) {
 
 // add a new phrase
 func AddPhrase(c *gin.Context, db *gorm.DB) {
-	text := c.PostForm("text")
-	open_id := c.PostForm("open_id")
-	group_id, _ := strconv.Atoi(c.PostForm("group_id"))
+	var newPhrase newPhrase
+	// bind json
+	if err := c.ShouldBindJSON(&newPhrase); err != nil {
+		c.AbortWithStatusJSON(
+			http.StatusInternalServerError,
+			gin.H{"error": err.Error()})
+		return
+	}
 
 	// check text maxium length
-	isValidate := utils.ValidateText(text)
+	isValidate := utils.ValidateText(newPhrase.Text)
 
-	// check text unique
+	// check text uniqueness
 	var phrase model.PhraseModel
-	findRes := db.Where(&model.PhraseModel{Text: text}).Find(&phrase)
+	findRes := db.Where(&model.PhraseModel{Text: newPhrase.Text}).Find(&phrase)
 
 	if isValidate {
 		if findRes.RowsAffected == 0 {
-			ceateRes := db.Create(&model.PhraseModel{Text: text, OpenID: open_id, GroupID: group_id})
+			ceateRes := db.Create(&model.PhraseModel{Text: newPhrase.Text, OpenID: newPhrase.OpenID, GroupID: newPhrase.GroupID, CreateTime: time.Now()})
 			if ceateRes.Error != nil {
 				fmt.Printf("Insert new phrase failed, %v", ceateRes.Error)
 			}
@@ -148,14 +162,15 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
-	var phraseIDs []int
+	fmt.Printf("Res %v", latestClickedPhrases)
 	for _, phrase := range latestClickedPhrases {
 		var resDB model.PhraseModel
 		phrase_id := phrase.PhraseID
-		phraseIDs = append(phraseIDs, phrase_id)
 		clicks := phrase.Clicks
 		open_id := phrase.OpenID
 		group_id := phrase.GroupID
+
+		fmt.Printf("phrase %v\n %v\n %v\n %v\n", phrase_id, clicks, open_id, group_id)
 
 		res := db.Table("phrase_models").Where(&model.PhraseModel{PhraseID: phrase_id}).Find(&resDB)
 
@@ -167,26 +182,9 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 		}
 	}
 
-	type Return struct {
-		PhraseID       int    `json:"phrase_id"`
-		Text           string `json:"text"`
-		HotGroupID     int    `json:"hot_group_id"`
-		HotGroupClicks int    `json:"hot_group_clicks"`
-		Clicks         int    `json:"clicks"`
-		UpdateTime     int64  `json:"update_time"`
-	}
-	var res []Return
-	for _, id := range phraseIDs {
-		var item Return
-		r := db.Table("phrase_models").Select("phrase_id, text, hot_group_id, hot_group_clicks, clicks, update_time").Where("phrase_id = ?", id).Scan(&item)
-		if r.RowsAffected > 0 {
-			res = append(res, item)
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
-		"d": res,
+		"d": "",
 		"m": "",
 	})
 }
