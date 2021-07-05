@@ -19,7 +19,7 @@ func main() {
 
 	go model.UpdateStats(db, cachePhrases, 100)
 	r.GET("/phrases", func(c *gin.Context) {
-		api.GetPhrases(c, db, cachePhrases)
+		api.GetSrollingPhrases(c, db, cachePhrases)
 	})
 
 	r.POST("/phrase", func(c *gin.Context) {

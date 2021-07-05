@@ -46,7 +46,7 @@ type CachePhrases struct {
 
 var limitPhrase = 100
 
-func (cp *CachePhrases) GetAllPhrases(limit int) []PhraseItem {
+func (cp *CachePhrases) GetPhrasesList(limit int) []PhraseItem {
 	limitPhrase = limit
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
@@ -63,8 +63,8 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	cp.mu.Lock()
 	var allPhrasesItems []PhraseItem
 	var newestPhrases, randomPhrases []PhraseModel
-	newestPhrasesCount := int(float64(limitPhrase) * 0.30)
-	topNPhrasesCount := int(float64(limitPhrase) * 0.30)
+	newestPhrasesCount := int(float64(limitPhrase) * 0.3)
+	topNPhrasesCount := int(float64(limitPhrase) * 0.3)
 
 	type topItem struct {
 		Clicks   int `json:"clicks"`

@@ -25,8 +25,8 @@ type newPhrase struct {
 	GroupID int    `json:"group_id"`
 }
 
-// get all phrases
-func GetPhrases(c *gin.Context, db *gorm.DB, cachePhrases *model.CachePhrases) {
+// return phrases to wechat
+func GetSrollingPhrases(c *gin.Context, db *gorm.DB, cachePhrases *model.CachePhrases) {
 	const defaultLimit = "100"
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
 
@@ -35,7 +35,7 @@ func GetPhrases(c *gin.Context, db *gorm.DB, cachePhrases *model.CachePhrases) {
 		limit = 100
 	}
 
-	items := cachePhrases.GetAllPhrases(limit)
+	items := cachePhrases.GetPhrasesList(limit)
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": items,
@@ -123,4 +123,18 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 		"d": "",
 		"m": "",
 	})
+}
+
+// get all phrases
+func GetAllPhrases(c *gin.Context) {
+	defaultLimit := "50"
+	defaultOffset := "0"
+	defaultStatus := "1,2"
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
+	offset, _ := strconv.Atoi(c.DefaultQuery("limit", defaultOffset))
+	status, _ := strconv.Atoi(c.DefaultQuery("limit", defaultStatus))
+
+
+
 }
