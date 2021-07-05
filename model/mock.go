@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func MockPhraseClick(n int, db *gorm.DB) {
@@ -19,25 +20,22 @@ func MockPhraseClick(n int, db *gorm.DB) {
 			ClickTime: time.Now(),
 		}
 
-		db.Create(&phraseClick)
+		db.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(&phraseClick)
 	}
 }
 
 func MockPhrase(n int, db *gorm.DB) {
 	for i := 1; i <= n; i++ {
 		phrase := PhraseModel{
-			PhraseID:       i,
-			Text:           fmt.Sprintf("tidb%v", i),
-			GroupID:        rand.Intn(5) + 1,
-			OpenID:         fmt.Sprintf("%d", (rand.Intn(5)+1)*100),
-			IsShow:         rand.Intn(2) == 1,
-			IsDelete:       rand.Intn(2) == 1,
-			CreateTime:     time.Now(),
-			Clicks:         rand.Intn(10) + 30,
-			HotGroupID:     rand.Intn(5) + 1,
-			HotGroupClicks: rand.Intn(10) + 10,
+			PhraseID:   i,
+			Text:       fmt.Sprintf("tidb%v", i),
+			GroupID:    rand.Intn(5) + 1,
+			OpenID:     fmt.Sprintf("%d", (rand.Intn(5)+1)*100),
+			Status:     rand.Intn(3),
+			CreateTime: time.Now(),
+			ShowTime:   time.Now(),
 		}
 
-		db.Create(&phrase)
+		db.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(&phrase)
 	}
 }

@@ -14,11 +14,11 @@ func TiDBConnect() *gorm.DB {
 		panic("failed to connect database")
 	}
 
-	db.AutoMigrate(&model.PhraseClickModel{}, &model.PhraseModel{})
+	db.Debug().AutoMigrate(&model.PhraseClickModel{}, &model.PhraseModel{})
 
-	// model.MockPhraseClick(100, db)
+	model.MockPhraseClick(200, db)
 
-	// model.MockPhrase(50, db)
+	model.MockPhrase(200, db)
 
 	return db
 }
