@@ -1,6 +1,7 @@
 package model
 
 import (
+	"database/sql"
 	"fmt"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// table `phrase_click_model` schema
 type PhraseClickModel struct {
 	ID        int       `gorm:"primaryKey" json:"id"`
 	GroupID   int       `json:"group_id"`
@@ -17,6 +19,7 @@ type PhraseClickModel struct {
 	ClickTime time.Time `json:"click_time"`
 }
 
+// table `phrase_model` schema
 type PhraseModel struct {
 	PhraseID   int       `gorm:"primaryKey" json:"phrase_id"`
 	Text       string    `json:"text"`
@@ -27,6 +30,7 @@ type PhraseModel struct {
 	ShowTime   time.Time `json:"show_time"`
 }
 
+// API `/phrases` return phraseItem
 type PhraseItem struct {
 	PhraseID       int    `json:"phrase_id"`
 	Text           string `json:"text"`
@@ -40,35 +44,50 @@ type CachePhrases struct {
 	mu         sync.RWMutex
 }
 
-func (cp *CachePhrases) GetAllItems() []PhraseItem {
+var limitPhrase = 100
+
+func (cp *CachePhrases) GetAllPhrases(limit int) []PhraseItem {
+	limitPhrase = limit
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
 	return cp.PhraseList
 }
 
+/* calculate and update phrases
+append 30% neweset phrases, whose status need to be reviewd
+append 30% hot phrases
+append 40% random phrases
+*/
+
 func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	cp.mu.Lock()
 	var allPhrasesItems []PhraseItem
 	var newestPhrases, randomPhrases []PhraseModel
-	type shortItem struct {
+	newestPhrasesCount := int(float64(limitPhrase) * 0.30)
+	topNPhrasesCount := int(float64(limitPhrase) * 0.30)
+
+	type topItem struct {
 		Clicks   int `json:"clicks"`
 		PhraseID int `json:"phrase_id"`
 		GroupID  int `json:"group_id"`
 	}
-	var topNItems []shortItem
+	var topNItems []topItem
+
+	// get count of reviewed phrase
 	var total int
-	db.Raw("Select count(*) from phrase_models where status=1").First(&total)
+	db.Raw("Select count(*) from phrase_models where status=1").Find(&total)
 
-	//  topNPhrases, randomPhrases []PhraseModel
-	// var count int
-	// db.Row
-	// 0 -- not show
-	// 1 -- show
-	// 2 -- delete
-	newestPhrasesRes := db.Table("phrase_models").Where("status = ?", 1).Order("show_time").Limit(10).Find(&newestPhrases)
+	if total < limitPhrase {
+		limitPhrase = total
+	}
 
-	topNPhrasesRes := db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 1 group by a.phrase_id order by clicks desc limit 10;").Scan(&topNItems)
+	// get 10 newest phrases
+	newestPhrasesRes := db.Table("phrase_models").Where("status = ?", 1).Order("show_time desc").Limit(newestPhrasesCount).Find(&newestPhrases)
 
+	// get 10 top click phrases
+	topNPhrasesRes := db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 1 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).Scan(&topNItems)
+
+	// de-duplicate phrase
 	allIDs := make(map[int]bool)
 	for _, item := range newestPhrases {
 		allIDs[item.PhraseID] = true
@@ -76,14 +95,11 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	for _, item := range topNItems {
 		allIDs[item.PhraseID] = true
 	}
-	expectNum := 50
-	if expectNum > total {
-		expectNum = total
-	}
 
-	for len(allIDs) < expectNum {
-		detal := expectNum - len(allIDs)
-		randomPhrasesRes := db.Raw("SELECT * FROM phrase_models where status = 1 ORDER BY RAND() LIMIT ?", detal).Scan(&randomPhrases)
+	// get more random phrase if de-duplicate topNPhrases and newestPhrases
+	for len(allIDs) < limitPhrase {
+		delta := limitPhrase - len(allIDs)
+		randomPhrasesRes := db.Raw("SELECT * FROM phrase_models where status = 1 ORDER BY RAND() LIMIT ?", delta).Scan(&randomPhrases)
 		if randomPhrasesRes.Error != nil {
 			fmt.Printf("error")
 			return
@@ -92,61 +108,47 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 			allIDs[item.PhraseID] = true
 		}
 	}
-	fmt.Println("xxx:", len(allIDs), total)
+
 	if newestPhrasesRes.Error != nil {
-		fmt.Printf("error")
+		fmt.Printf("error: %v", newestPhrasesRes.Error)
 		return
 	}
 
 	if topNPhrasesRes.Error != nil {
-		fmt.Printf("error")
+		fmt.Printf("error: %v", topNPhrasesRes.Error)
 		return
 	}
 
 	for id := range allIDs {
 		var temp PhraseItem
-		var countTemp shortItem
-		var countTemp2 shortItem
+		var countTemp topItem
+		var countTemp2 topItem
 		db.Table("phrase_models").Select("phrase_id, text").Where("phrase_id = ?", id).Find(&temp)
+
+		// find out all click counts of a specific phrase
 		db.Table("phrase_click_models").Select("sum(clicks) as clicks, phrase_id").Where("phrase_id = ?", id).Group("phrase_id").Find(&countTemp)
+
+		// find out which group has top clicks on specific phrase
 		db.Table("phrase_click_models").Select("sum(clicks) as clicks, phrase_id, group_id").Where("phrase_id = ?", id).Group("phrase_id, group_id").Order("clicks desc").Limit(1).Find(&countTemp2)
 
 		temp.Clicks = countTemp.Clicks
 		temp.HotGroupClicks = countTemp2.Clicks
 		temp.HotGroupID = countTemp2.GroupID
 		allPhrasesItems = append(allPhrasesItems, temp)
+
+		// update show time of selected phrases
 		db.Table("phrase_models").Where("phrase_id = ?", id).Update("show_time", time.Now())
 	}
 
-	//fmt.Printf("allPhrases\n %v\n", allPhrases)
-
-	// fmt.Printf("newestPhrasesRes\n %#+v\n", allPhrasesItems)
 	cp.PhraseList = allPhrasesItems
 	cp.mu.Unlock()
 }
 
-func UpdateStats(db *gorm.DB, cache *CachePhrases) {
+func UpdateStats(db *gorm.DB, cache *CachePhrases, limit int) {
+	limitPhrase = limit
 	ticker := time.NewTicker(3 * time.Second)
-	fmt.Printf("ticker %v\n", ticker)
 	for {
 		<-ticker.C
 		cache.updateStats(db)
 	}
 }
-
-// select * from pharse_models order by show_time desc limit 10;
-// -> 最新 10;
-
-// SELECT
-// 	*
-// FROM
-// 	pharse_models
-// ORDER BY RAND()
-// LIMIT 50;
-
-// -> random 50
-
-//res2 := db.Table("phrase_click_models").
-// Select("sum(clicks) as clicks", "phrase_id").
-// Order(clicks).Limit(40).Find(&sumClicks)
-// -> top 40

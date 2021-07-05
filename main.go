@@ -12,11 +12,12 @@ func main() {
 	r := gin.Default()
 
 	db := utils.TiDBConnect()
+
 	cachePhrases := &model.CachePhrases{
 		PhraseList: make([]model.PhraseItem, 0, 100),
 	}
 
-	go model.UpdateStats(db, cachePhrases)
+	go model.UpdateStats(db, cachePhrases, 100)
 	r.GET("/phrases", func(c *gin.Context) {
 		api.GetPhrases(c, db, cachePhrases)
 	})

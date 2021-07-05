@@ -14,7 +14,7 @@ func TiDBConnect() *gorm.DB {
 		panic("failed to connect database")
 	}
 
-	db.Debug().AutoMigrate(&model.PhraseClickModel{}, &model.PhraseModel{})
+	db.AutoMigrate(&model.PhraseClickModel{}, &model.PhraseModel{})
 
 	model.MockPhraseClick(200, db)
 
