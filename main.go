@@ -15,7 +15,6 @@ func main() {
 
 	cachePhrases := &model.CachePhrases{
 		PhraseList: make([]model.PhraseItem, 0, 100),
-		// LimitPhrase: 100,
 	}
 
 	go model.UpdateStats(db, cachePhrases)
@@ -35,9 +34,9 @@ func main() {
 		api.UpdateClickedPhrase(c, db)
 	})
 
-	r.GET("/phrases_full", func(c *gin.Context) {
-		api.GetAllPhrases(c, db)
-	})
+	// r.GET("/phrases_full", func(c *gin.Context) {
+	// 	api.GetAllPhrases(c, db)
+	// })
 
 	r.Run()
 }

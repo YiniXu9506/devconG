@@ -37,7 +37,16 @@ type allPhrasesWithDistribution struct {
 
 // return phrases to wechat
 func GetSrollingPhrases(c *gin.Context, db *gorm.DB, cachePhrases *model.CachePhrases) {
-	items := cachePhrases.GetPhrasesList()
+	const defaultLimit = "100"
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
+
+	if err != nil {
+		fmt.Printf("failed to convert string to int")
+		limit = 100
+	}
+
+	items := cachePhrases.GetPhrasesList(limit, db)
+
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": items,
@@ -65,7 +74,7 @@ func AddPhrase(c *gin.Context, db *gorm.DB) {
 
 	if isValidate {
 		if findRes.RowsAffected == 0 {
-			ceateRes := db.Table("phrase_models").Create(&model.PhraseModel{Text: newPhrase.Text, OpenID: newPhrase.OpenID, GroupID: newPhrase.GroupID, Status: 1, CreateTime: time.Now(), ShowTime: time.Now()})
+			ceateRes := db.Table("phrase_models").Create(&model.PhraseModel{Text: newPhrase.Text, OpenID: newPhrase.OpenID, GroupID: newPhrase.GroupID, Status: 1, CreateTime: time.Now(), UpdateTime: time.Now()})
 			if ceateRes.Error != nil {
 				fmt.Printf("Insert new phrase failed, %v", ceateRes.Error)
 			}
@@ -128,39 +137,39 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 }
 
 // get all phrases
-func GetAllPhrases(c *gin.Context, db *gorm.DB) {
-	defaultLimit := "50"
-	// defaultOffset := "0"
-	// defaultStatus := "1,2"
+// func GetAllPhrases(c *gin.Context, db *gorm.DB) {
+// 	defaultLimit := "50"
+// 	// defaultOffset := "0"
+// 	// defaultStatus := "1,2"
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
-	// offset, _ := strconv.Atoi(c.DefaultQuery("limit", defaultOffset))
-	// status, _ := strconv.Atoi(c.DefaultQuery("limit", defaultStatus))
+// 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
+// 	// offset, _ := strconv.Atoi(c.DefaultQuery("limit", defaultOffset))
+// 	// status, _ := strconv.Atoi(c.DefaultQuery("limit", defaultStatus))
 
-	var phraseList []model.PhraseModel
+// 	var phraseList []model.PhraseModel
 
-	var distributions []distribution
+// 	var distributions []distribution
 
-	var phrasesWithDistribution []allPhrasesWithDistribution
+// 	var phrasesWithDistribution []allPhrasesWithDistribution
 
-	db.Table("phrase_models").Limit(limit).Find(&phraseList)
+// 	db.Table("phrase_models").Limit(limit).Find(&phraseList)
 
-	for _, phrase := range phraseList {
-		var temp allPhrasesWithDistribution
-		fmt.Printf("phrase %v\n", phrase)
-		db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
+// 	for _, phrase := range phraseList {
+// 		var temp allPhrasesWithDistribution
+// 		fmt.Printf("phrase %v\n", phrase)
+// 		db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
 
-		fmt.Printf("distributions %v\n", distributions)
+// 		fmt.Printf("distributions %v\n", distributions)
 
-		temp.PhraseList = phrase
-		temp.Distributions = distributions
+// 		temp.PhraseList = phrase
+// 		temp.Distributions = distributions
 
-		phrasesWithDistribution = append(phrasesWithDistribution, temp)
-	}
+// 		phrasesWithDistribution = append(phrasesWithDistribution, temp)
+// 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"c": 0,
-		"d": phrasesWithDistribution,
-		"m": "",
-	})
-}
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"c": 0,
+// 		"d": phrasesWithDistribution,
+// 		"m": "",
+// 	})
+// }

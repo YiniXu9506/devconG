@@ -27,7 +27,7 @@ type PhraseModel struct {
 	OpenID     string    `json:"open_id"`
 	Status     int       `json:"status"`
 	CreateTime time.Time `json:"create_time"`
-	ShowTime   time.Time `json:"show_time"`
+	UpdateTime   time.Time `json:"update_time"`
 }
 
 // API `/phrases` return phraseItem
@@ -45,10 +45,31 @@ type CachePhrases struct {
 	// LimitPhrase int
 }
 
-func (cp *CachePhrases) GetPhrasesList() []PhraseItem {
+func (cp *CachePhrases) GetPhrasesList(limit int, db *gorm.DB) []PhraseItem {
 	cp.mu.RLock()
+
+	var phrase []PhraseItem
+
+	// get count of reviewed phrase
+	var total int
+	db.Raw("Select count(*) from phrase_models where status=1").Find(&total)
+
+	if total < limit {
+		limit = total
+	}
+
+	slice := int(float64(total) * 0.3)
+
+	newestPhrasesCount := int(float64(limit) * 0.3)
+	topNPhrasesCount := int(float64(limit) * 0.3)
+	randeomPhraseCount := limit - newestPhrasesCount - topNPhrasesCount
+
+	phrase = append(phrase, cp.PhraseList[:newestPhrasesCount]...)
+	phrase = append(phrase, cp.PhraseList[slice: slice + topNPhrasesCount]...)
+	phrase = append(phrase, cp.PhraseList[2 * slice: 2 * slice +randeomPhraseCount]...)
+
 	defer cp.mu.RUnlock()
-	return cp.PhraseList
+	return phrase
 }
 
 /* calculate and update phrases
@@ -68,7 +89,6 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 		GroupID  int `json:"group_id"`
 	}
 	var topNItems []topItem
-	// limitPhrase := cp.limitPhrase
 	limitPhrase := 100
 
 	// get count of reviewed phrase
@@ -83,7 +103,7 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	topNPhrasesCount := int(float64(limitPhrase) * 0.3)
 
 	// get 10 newest phrases
-	newestPhrasesRes := db.Table("phrase_models").Where("status = ?", 1).Order("show_time desc").Limit(newestPhrasesCount).Find(&newestPhrases)
+	newestPhrasesRes := db.Table("phrase_models").Where("status = ?", 1).Order("update_time desc").Limit(newestPhrasesCount).Find(&newestPhrases)
 
 	// get 10 top click phrases
 	topNPhrasesRes := db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 1 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).Scan(&topNItems)
@@ -122,9 +142,11 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 
 	for id := range allIDs {
 		var temp PhraseItem
+		var temp2 PhraseModel
 		var countTemp topItem
 		var countTemp2 topItem
-		db.Table("phrase_models").Select("phrase_id, text").Where("phrase_id = ?", id).Find(&temp)
+		db.Table("phrase_models").Select("phrase_id, text, group_id").Where("phrase_id = ?", id).Find(&temp)
+		db.Table("phrase_models").Select("group_id").Where("phrase_id = ?", id).Find(&temp2)
 
 		// find out all click counts of a specific phrase
 		db.Table("phrase_click_models").Select("sum(clicks) as clicks, phrase_id").Where("phrase_id = ?", id).Group("phrase_id").Find(&countTemp)
@@ -132,13 +154,18 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 		// find out which group has top clicks on specific phrase
 		db.Table("phrase_click_models").Select("sum(clicks) as clicks, phrase_id, group_id").Where("phrase_id = ?", id).Group("phrase_id, group_id").Order("clicks desc").Limit(1).Find(&countTemp2)
 
+
+		if countTemp2.GroupID == 0 {
+			countTemp2.GroupID = temp2.GroupID
+		}
+
 		temp.Clicks = countTemp.Clicks
 		temp.HotGroupClicks = countTemp2.Clicks
 		temp.HotGroupID = countTemp2.GroupID
 		allPhrasesItems = append(allPhrasesItems, temp)
 
 		// update show time of selected phrases
-		db.Table("phrase_models").Where("phrase_id = ?", id).Update("show_time", time.Now())
+		db.Table("phrase_models").Where("phrase_id = ?", id).Update("update_time", time.Now())
 	}
 
 	cp.PhraseList = allPhrasesItems
