@@ -16,7 +16,7 @@ func MockPhraseClick(n int, db *gorm.DB) {
 			GroupID:   rand.Intn(5) + 1,
 			OpenID:    fmt.Sprintf("%d", (rand.Intn(5)+1)*100),
 			PhraseID:  i,
-			Clicks:    rand.Intn(100),
+			Clicks:    rand.Intn(2),
 			ClickTime: time.Now(),
 		}
 

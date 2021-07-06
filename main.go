@@ -26,10 +26,6 @@ func main() {
 		api.AddPhrase(c, db)
 	})
 
-	// r.POST("/phrase_limit", func(c *gin.Context) {
-	// 	cachePhrases.Updtealimit()
-	// })
-
 	r.POST("/phrase_hot", func(c *gin.Context) {
 		api.UpdateClickedPhrase(c, db)
 	})
