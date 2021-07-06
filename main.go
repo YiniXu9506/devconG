@@ -15,9 +15,10 @@ func main() {
 
 	cachePhrases := &model.CachePhrases{
 		PhraseList: make([]model.PhraseItem, 0, 100),
+		// LimitPhrase: 100,
 	}
 
-	go model.UpdateStats(db, cachePhrases, 100)
+	go model.UpdateStats(db, cachePhrases)
 	r.GET("/phrases", func(c *gin.Context) {
 		api.GetSrollingPhrases(c, db, cachePhrases)
 	})
@@ -26,8 +27,16 @@ func main() {
 		api.AddPhrase(c, db)
 	})
 
+	// r.POST("/phrase_limit", func(c *gin.Context) {
+	// 	cachePhrases.Updtealimit()
+	// })
+
 	r.POST("/phrase_hot", func(c *gin.Context) {
 		api.UpdateClickedPhrase(c, db)
+	})
+
+	r.GET("/phrases_full", func(c *gin.Context) {
+		api.GetAllPhrases(c, db)
 	})
 
 	r.Run()

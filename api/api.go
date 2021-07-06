@@ -25,17 +25,19 @@ type newPhrase struct {
 	GroupID int    `json:"group_id"`
 }
 
+type distribution struct {
+	GroupID int `json:"group_id"`
+	Clicks  int
+}
+
+type allPhrasesWithDistribution struct {
+	PhraseList    model.PhraseModel
+	Distributions []distribution
+}
+
 // return phrases to wechat
 func GetSrollingPhrases(c *gin.Context, db *gorm.DB, cachePhrases *model.CachePhrases) {
-	const defaultLimit = "100"
-	limit, err := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
-
-	if err != nil {
-		fmt.Printf("failed to convert string to int")
-		limit = 100
-	}
-
-	items := cachePhrases.GetPhrasesList(limit)
+	items := cachePhrases.GetPhrasesList()
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": items,
@@ -126,15 +128,39 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 }
 
 // get all phrases
-func GetAllPhrases(c *gin.Context) {
+func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 	defaultLimit := "50"
-	defaultOffset := "0"
-	defaultStatus := "1,2"
+	// defaultOffset := "0"
+	// defaultStatus := "1,2"
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
-	offset, _ := strconv.Atoi(c.DefaultQuery("limit", defaultOffset))
-	status, _ := strconv.Atoi(c.DefaultQuery("limit", defaultStatus))
+	// offset, _ := strconv.Atoi(c.DefaultQuery("limit", defaultOffset))
+	// status, _ := strconv.Atoi(c.DefaultQuery("limit", defaultStatus))
 
+	var phraseList []model.PhraseModel
 
+	var distributions []distribution
 
+	var phrasesWithDistribution []allPhrasesWithDistribution
+
+	db.Table("phrase_models").Limit(limit).Find(&phraseList)
+
+	for _, phrase := range phraseList {
+		var temp allPhrasesWithDistribution
+		fmt.Printf("phrase %v\n", phrase)
+		db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
+
+		fmt.Printf("distributions %v\n", distributions)
+
+		temp.PhraseList = phrase
+		temp.Distributions = distributions
+
+		phrasesWithDistribution = append(phrasesWithDistribution, temp)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": phrasesWithDistribution,
+		"m": "",
+	})
 }

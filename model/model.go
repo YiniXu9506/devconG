@@ -42,12 +42,10 @@ type PhraseItem struct {
 type CachePhrases struct {
 	PhraseList []PhraseItem
 	mu         sync.RWMutex
+	// LimitPhrase int
 }
 
-var limitPhrase = 100
-
-func (cp *CachePhrases) GetPhrasesList(limit int) []PhraseItem {
-	limitPhrase = limit
+func (cp *CachePhrases) GetPhrasesList() []PhraseItem {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
 	return cp.PhraseList
@@ -63,8 +61,6 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	cp.mu.Lock()
 	var allPhrasesItems []PhraseItem
 	var newestPhrases, randomPhrases []PhraseModel
-	newestPhrasesCount := int(float64(limitPhrase) * 0.3)
-	topNPhrasesCount := int(float64(limitPhrase) * 0.3)
 
 	type topItem struct {
 		Clicks   int `json:"clicks"`
@@ -72,6 +68,8 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 		GroupID  int `json:"group_id"`
 	}
 	var topNItems []topItem
+	// limitPhrase := cp.limitPhrase
+	limitPhrase := 100
 
 	// get count of reviewed phrase
 	var total int
@@ -80,6 +78,9 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	if total < limitPhrase {
 		limitPhrase = total
 	}
+
+	newestPhrasesCount := int(float64(limitPhrase) * 0.3)
+	topNPhrasesCount := int(float64(limitPhrase) * 0.3)
 
 	// get 10 newest phrases
 	newestPhrasesRes := db.Table("phrase_models").Where("status = ?", 1).Order("show_time desc").Limit(newestPhrasesCount).Find(&newestPhrases)
@@ -144,8 +145,7 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	cp.mu.Unlock()
 }
 
-func UpdateStats(db *gorm.DB, cache *CachePhrases, limit int) {
-	limitPhrase = limit
+func UpdateStats(db *gorm.DB, cache *CachePhrases) {
 	ticker := time.NewTicker(3 * time.Second)
 	for {
 		<-ticker.C
