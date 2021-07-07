@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"strings"
 
 	"github.com/YiniXu9506/devconG/model"
 	"github.com/YiniXu9506/devconG/utils"
@@ -27,12 +28,18 @@ type newPhrase struct {
 
 type distribution struct {
 	GroupID int `json:"group_id"`
-	Clicks  int
+	Clicks  int `json:"clicks"`
 }
 
 type allPhrasesWithDistribution struct {
-	PhraseList    model.PhraseModel
-	Distributions []distribution
+	model.PhraseModel
+	Distributions []distribution `json:"distributions"`
+}
+
+type topNPhrasesWithDistribution struct {
+	PhraseID   int       `json:"phrase_id"`
+	Text       string    `json:"text"`
+	Distributions []distribution `json:"distributions"`
 }
 
 // return phrases to wechat
@@ -137,39 +144,85 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 }
 
 // get all phrases
-// func GetAllPhrases(c *gin.Context, db *gorm.DB) {
-// 	defaultLimit := "50"
-// 	// defaultOffset := "0"
-// 	// defaultStatus := "1,2"
+func GetAllPhrases(c *gin.Context, db *gorm.DB) {
+	defaultLimit := "50"
+	defaultOffset := "0"
+	defaultStatus := "1,2"
 
-// 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
-// 	// offset, _ := strconv.Atoi(c.DefaultQuery("limit", defaultOffset))
-// 	// status, _ := strconv.Atoi(c.DefaultQuery("limit", defaultStatus))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
+	offset, _ := strconv.Atoi(c.DefaultQuery("limit", defaultOffset))
+	status := c.DefaultQuery("limit", defaultStatus)
 
-// 	var phraseList []model.PhraseModel
+	s := strings.Split(status, ",")
 
-// 	var distributions []distribution
+	var phraseList []model.PhraseModel
 
-// 	var phrasesWithDistribution []allPhrasesWithDistribution
+	var distributions []distribution
 
-// 	db.Table("phrase_models").Limit(limit).Find(&phraseList)
+	var phrasesWithDistribution []allPhrasesWithDistribution
 
-// 	for _, phrase := range phraseList {
-// 		var temp allPhrasesWithDistribution
-// 		fmt.Printf("phrase %v\n", phrase)
-// 		db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
+	db.Debug().Table("phrase_models").Where("status = ?", s[0]).Or("status = ?", s[1]).Limit(limit).Offset(offset).Find(&phraseList)
 
-// 		fmt.Printf("distributions %v\n", distributions)
+	for _, phrase := range phraseList {
+		var temp allPhrasesWithDistribution
+		db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
 
-// 		temp.PhraseList = phrase
-// 		temp.Distributions = distributions
+		temp.PhraseID = phrase.PhraseID
+		temp.Text = phrase.Text
+		temp.GroupID = phrase.GroupID
+		temp.OpenID = phrase.OpenID
+		temp.Status = phrase.Status
+		temp.CreateTime = phrase.CreateTime
+		temp.UpdateTime = phrase.UpdateTime
+		temp.Distributions = distributions
 
-// 		phrasesWithDistribution = append(phrasesWithDistribution, temp)
-// 	}
+		phrasesWithDistribution = append(phrasesWithDistribution, temp)
+	}
 
-// 	c.JSON(http.StatusOK, gin.H{
-// 		"c": 0,
-// 		"d": phrasesWithDistribution,
-// 		"m": "",
-// 	})
-// }
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": phrasesWithDistribution,
+		"m": "",
+	})
+}
+
+// get top-N phrases
+func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
+	defaultLimit := "5"
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
+
+	type topPhraseID struct {
+		PhraseID int `json:"phrase_id"`
+		Clicks int `json:"clicks"`
+	}
+
+	type topPhraseText struct {
+		Text string `json:"text"`
+	}
+
+	var topPhraseIDList []topPhraseID
+	var topNPhrasesWithDistributions []topNPhrasesWithDistribution
+
+	db.Debug().Table("phrase_click_models").Select("phrase_id, SUM(clicks) as clicks").Group("phrase_id").Order("clicks desc").Limit(limit).Find(&topPhraseIDList)
+
+	for _, phrase := range topPhraseIDList {
+		var distributions []distribution
+		var topPhraseTextItem topPhraseText
+		var temp topNPhrasesWithDistribution
+
+		db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
+		db.Table("phrase_models").Select("text").Where("phrase_id = ?", phrase.PhraseID).Find(&topPhraseTextItem)
+
+		temp.PhraseID = phrase.PhraseID
+		temp.Text = topPhraseTextItem.Text
+		temp.Distributions = distributions
+
+		topNPhrasesWithDistributions = append(topNPhrasesWithDistributions, temp)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": topNPhrasesWithDistributions,
+		"m": "",
+	})
+}

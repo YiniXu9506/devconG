@@ -30,9 +30,13 @@ func main() {
 		api.UpdateClickedPhrase(c, db)
 	})
 
-	// r.GET("/phrases_full", func(c *gin.Context) {
-	// 	api.GetAllPhrases(c, db)
-	// })
+	r.GET("/phrases_full", func(c *gin.Context) {
+		api.GetAllPhrases(c, db)
+	})
+
+	r.GET("/top_phrases", func(c *gin.Context) {
+		api.GetTopNPhrases(c, db)
+	})
 
 	r.Run()
 }
