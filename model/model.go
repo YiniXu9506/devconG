@@ -3,9 +3,9 @@ package model
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
-	"math/rand"
 
 	"gorm.io/gorm"
 )
@@ -28,7 +28,7 @@ type PhraseModel struct {
 	OpenID     string    `json:"open_id"`
 	Status     int       `json:"status"`
 	CreateTime time.Time `json:"create_time"`
-	UpdateTime   time.Time `json:"update_time"`
+	UpdateTime time.Time `json:"update_time"`
 }
 
 // API `/phrases` return phraseItem
@@ -73,15 +73,15 @@ func (cp *CachePhrases) GetPhrasesList(limit int, db *gorm.DB) []PhraseItem {
 	sliceGap := int(float64(reviewedPhraseCount) * 0.3)
 
 	phrase = append(phrase, cp.PhraseList[:newestPhrasesCount]...)
-	phrase = append(phrase, cp.PhraseList[sliceGap: sliceGap + topNPhrasesCount]...)
-	phrase = append(phrase, cp.PhraseList[2 * sliceGap: 2 * sliceGap +randeomPhraseCount]...)
+	phrase = append(phrase, cp.PhraseList[sliceGap:sliceGap+topNPhrasesCount]...)
+	phrase = append(phrase, cp.PhraseList[2*sliceGap:2*sliceGap+randeomPhraseCount]...)
 
 	// fmt.Printf("%v\n", cp.PhraseList[:newestPhrasesCount])
 	// fmt.Printf("%v\n", cp.PhraseList[sliceGap: sliceGap + topNPhrasesCount])
 	// fmt.Printf("%v\n", cp.PhraseList[2 * sliceGap: 2 * sliceGap +randeomPhraseCount])
 	rand.Shuffle(len(phrase), func(i, j int) {
-        phrase[i], phrase[j] = phrase[j], phrase[i]
-    })
+		phrase[i], phrase[j] = phrase[j], phrase[i]
+	})
 
 	defer cp.mu.RUnlock()
 
@@ -113,7 +113,7 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	newestPhrasesCount, topNPhrasesCount, limit := getReturnPhraseCount(limit, reviewedPhraseCount, db)
 
 	// get newest-N phrases
-	newestPhrasesRes := db.Table("phrase_models").Where("status = ?", 1).Order("update_time desc").Limit(newestPhrasesCount).Find(&newestPhrases)
+	newestPhrasesRes := db.Table("phrase_models").Where("status = ?", 2).Order("update_time desc").Limit(newestPhrasesCount).Find(&newestPhrases)
 
 	// get top-N click phrases
 	topNPhrasesRes := db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 1 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).Scan(&topPhrases)
@@ -122,14 +122,14 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	allIDs := make(map[int]bool)
 	var allIDSorted []int
 	for _, item := range newestPhrases {
-		if res,ok:=allIDs[item.PhraseID]; !ok || !res {
+		if res, ok := allIDs[item.PhraseID]; !ok || !res {
 			allIDSorted = append(allIDSorted, item.PhraseID)
 		}
 
 		allIDs[item.PhraseID] = true
 	}
 	for _, item := range topPhrases {
-		if res,ok:=allIDs[item.PhraseID]; !ok || !res {
+		if res, ok := allIDs[item.PhraseID]; !ok || !res {
 			allIDSorted = append(allIDSorted, item.PhraseID)
 		}
 		allIDs[item.PhraseID] = true
@@ -144,13 +144,12 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 			return
 		}
 		for _, item := range randomPhrases {
-			if res,ok:=allIDs[item.PhraseID]; !ok || !res {
+			if res, ok := allIDs[item.PhraseID]; !ok || !res {
 				allIDSorted = append(allIDSorted, item.PhraseID)
 			}
 			allIDs[item.PhraseID] = true
 		}
 	}
-
 
 	if newestPhrasesRes.Error != nil {
 		fmt.Printf("error: %v", newestPhrasesRes.Error)
