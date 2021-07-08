@@ -163,7 +163,7 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 
 	var phrasesWithDistribution []allPhrasesWithDistribution
 
-	db.Debug().Table("phrase_models").Where("status = ?", s[0]).Or("status = ?", s[1]).Limit(limit).Offset(offset).Find(&phraseList)
+	db.Table("phrase_models").Where("status = ?", s[0]).Or("status = ?", s[1]).Limit(limit).Offset(offset).Find(&phraseList)
 
 	for _, phrase := range phraseList {
 		var temp allPhrasesWithDistribution
@@ -206,7 +206,7 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 	var topPhraseIDList []topPhraseID
 	var topNPhrasesWithDistributions []topNPhrasesWithDistribution
 
-	db.Debug().Table("phrase_click_models").Select("phrase_id, SUM(clicks) as clicks").Group("phrase_id").Order("clicks desc").Limit(limit).Find(&topPhraseIDList)
+	db.Table("phrase_click_models").Select("phrase_id, SUM(clicks) as clicks").Group("phrase_id").Order("clicks desc").Limit(limit).Find(&topPhraseIDList)
 
 	for _, phrase := range topPhraseIDList {
 		var distributions []distribution
