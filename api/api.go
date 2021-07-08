@@ -3,9 +3,10 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/YiniXu9506/devconG/model"
 	"github.com/YiniXu9506/devconG/utils"
@@ -37,9 +38,10 @@ type allPhrasesWithDistribution struct {
 }
 
 type topNPhrasesWithDistribution struct {
-	PhraseID   int       `json:"phrase_id"`
-	Text       string    `json:"text"`
+	PhraseID      int            `json:"phrase_id"`
+	Text          string         `json:"text"`
 	Distributions []distribution `json:"distributions"`
+	CreateTime    time.Time      `json:"create_time"`
 }
 
 // return phrases to wechat
@@ -193,11 +195,12 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 
 	type topPhraseID struct {
 		PhraseID int `json:"phrase_id"`
-		Clicks int `json:"clicks"`
+		Clicks   int `json:"clicks"`
 	}
 
 	type topPhraseText struct {
-		Text string `json:"text"`
+		Text       string    `json:"text"`
+		CreateTime time.Time `json:"create_time"`
 	}
 
 	var topPhraseIDList []topPhraseID
@@ -211,14 +214,19 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 		var temp topNPhrasesWithDistribution
 
 		db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
-		db.Table("phrase_models").Select("text").Where("phrase_id = ?", phrase.PhraseID).Find(&topPhraseTextItem)
+		db.Table("phrase_models").Select("text, create_time").Where("phrase_id = ?", phrase.PhraseID).Find(&topPhraseTextItem)
 
 		temp.PhraseID = phrase.PhraseID
 		temp.Text = topPhraseTextItem.Text
 		temp.Distributions = distributions
+		temp.CreateTime = topPhraseTextItem.CreateTime
 
 		topNPhrasesWithDistributions = append(topNPhrasesWithDistributions, temp)
 	}
+
+	sort.Slice(topNPhrasesWithDistributions, func(i, j int) bool {
+		return topNPhrasesWithDistributions[i].CreateTime.Before(topNPhrasesWithDistributions[j].CreateTime)
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
@@ -226,3 +234,18 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 		"m": "",
 	})
 }
+
+// func DeletePhrase(c *gin.Context, db *gorm.DB) {
+// 	type phraseIDQuery struct {
+// 		PhraseID int `json:"phrase_id" binding:"required"`
+// 	}
+
+// 	var IDQuery phraseIDQuery
+
+// 	if err := c.ShouldBindWith(&IDQuery, binding.Query); err == nil {
+// 		c.JSON(http.StatusOK, gin.H{"message": "Booking dates are valid!"})
+// 	} else {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+// 	}
+
+// }

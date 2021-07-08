@@ -1,0 +1,32 @@
+{
+    "polling_interval": 10,
+    "phrases_limit": 100,
+    "lt_clicks_size": [
+        {
+            "clicks": 10,
+            "size": 16
+        },
+        {
+            "clicks": 20,
+            "size": 18
+        },
+        {
+            "clicks": 500,
+            "size": 72
+        }
+    ],
+    "lt_clicks_speed": [
+        {
+            "clicks": 10,
+            "speed": 36
+        },
+        {
+            "clicks": 20,
+            "speed": 40
+        },
+        {
+            "clicks": 500,
+            "speed": 80
+        }
+    ]
+}
