@@ -3,10 +3,10 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"database/sql"
 
 	"github.com/YiniXu9506/devconG/model"
 	"github.com/YiniXu9506/devconG/utils"
@@ -41,7 +41,6 @@ type topNPhrasesWithDistribution struct {
 	PhraseID      int            `json:"phrase_id"`
 	Text          string         `json:"text"`
 	Distributions []distribution `json:"distributions"`
-	CreateTime    time.Time      `json:"create_time"`
 }
 
 // return phrases to wechat
@@ -152,10 +151,19 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 	defaultStatus := "1,2"
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
-	offset, _ := strconv.Atoi(c.DefaultQuery("limit", defaultOffset))
-	status := c.DefaultQuery("limit", defaultStatus)
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", defaultOffset))
+	status := c.DefaultQuery("status", defaultStatus)
+	var finalStatus [3]interface{}
 
 	s := strings.Split(status, ",")
+
+	for i := 0; i < 3; i++ {
+		if i < len(s) {
+			finalStatus[i] = s[i]
+		} else {
+			finalStatus[i] = 0
+		}
+	}
 
 	var phraseList []model.PhraseModel
 
@@ -163,7 +171,7 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 
 	var phrasesWithDistribution []allPhrasesWithDistribution
 
-	db.Table("phrase_models").Where("status = ?", s[0]).Or("status = ?", s[1]).Limit(limit).Offset(offset).Find(&phraseList)
+	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Offset(offset).Find(&phraseList)
 
 	for _, phrase := range phraseList {
 		var temp allPhrasesWithDistribution
@@ -200,7 +208,6 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 
 	type topPhraseText struct {
 		Text       string    `json:"text"`
-		CreateTime time.Time `json:"create_time"`
 	}
 
 	var topPhraseIDList []topPhraseID
@@ -214,19 +221,14 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 		var temp topNPhrasesWithDistribution
 
 		db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
-		db.Table("phrase_models").Select("text, create_time").Where("phrase_id = ?", phrase.PhraseID).Find(&topPhraseTextItem)
+		db.Table("phrase_models").Select("text").Where("phrase_id = ?", phrase.PhraseID).Find(&topPhraseTextItem)
 
 		temp.PhraseID = phrase.PhraseID
 		temp.Text = topPhraseTextItem.Text
 		temp.Distributions = distributions
-		temp.CreateTime = topPhraseTextItem.CreateTime
 
 		topNPhrasesWithDistributions = append(topNPhrasesWithDistributions, temp)
 	}
-
-	sort.Slice(topNPhrasesWithDistributions, func(i, j int) bool {
-		return topNPhrasesWithDistributions[i].CreateTime.Before(topNPhrasesWithDistributions[j].CreateTime)
-	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,

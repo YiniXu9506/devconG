@@ -7,7 +7,7 @@ import (
 func ValidateText(text string) bool {
 	count := utf8.RuneCountInString(text)
 
-	if count > 10 {
+	if count > 20 {
 		return false
 	}
 
