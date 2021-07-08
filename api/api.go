@@ -183,9 +183,12 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 
 	var allPhrasesResponse allPhrasesWithDistributionResponse
 
+	var returnTotalCount []model.PhraseModel
+
+	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Find(&returnTotalCount)
 	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Offset(offset).Find(&phraseList)
 
-	allPhrasesResponse.Pagi.Total = len(phraseList)
+	allPhrasesResponse.Pagi.Total = len(returnTotalCount)
 	allPhrasesResponse.Pagi.Offset = offset
 
 	for _, phrase := range phraseList {
