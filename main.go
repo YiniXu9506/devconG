@@ -80,9 +80,13 @@ func main() {
 		api.GetTopNPhrases(c, db)
 	})
 
-	// r.DELETE("/phrase", func(c *gin.Context) {
-	// 	api.DeletePhrase(c, db)
-	// })
+	r.DELETE("/phrase", func(c *gin.Context) {
+		api.DeletePhrase(c, db)
+	})
+
+	r.PATCH("/phrase", func(c *gin.Context) {
+		api.PatchPhrase(c, db)
+	})
 
 	r.GET("/h5_settings", func(c *gin.Context) {
 		c.JSON(200, gin.H{

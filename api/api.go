@@ -185,8 +185,8 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 
 	var returnTotalCount []model.PhraseModel
 
-	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Find(&returnTotalCount)
-	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Offset(offset).Find(&phraseList)
+	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Find(&returnTotalCount)
+	db.Debug().Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Offset(offset).Find(&phraseList)
 
 	allPhrasesResponse.Pagi.Total = len(returnTotalCount)
 	allPhrasesResponse.Pagi.Offset = offset
@@ -289,17 +289,74 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 	})
 }
 
-// func DeletePhrase(c *gin.Context, db *gorm.DB) {
-// 	type phraseIDQuery struct {
-// 		PhraseID int `json:"phrase_id" binding:"required"`
-// 	}
+func DeletePhrase(c *gin.Context, db *gorm.DB) {
+	type phraseIDQuery struct {
+		PhraseID int `form:"id" json:"id" binding:"required"`
+	}
 
-// 	var IDQuery phraseIDQuery
+	var idQuery phraseIDQuery
+	// var deletePhrase model.PhraseModel
 
-// 	if err := c.ShouldBindWith(&IDQuery, binding.Query); err == nil {
-// 		c.JSON(http.StatusOK, gin.H{"message": "Booking dates are valid!"})
-// 	} else {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 	}
+	if err := c.ShouldBind(&idQuery); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"c": 2,
+			"d": "",
+			"m": "phrase_id is required!",
+		})
+		return
+	}
 
-// }
+	fmt.Printf("idQuery %v\n", idQuery.PhraseID)
+
+	deletePhraseRes := db.Table("phrase_models").Where("phrase_id = ?", idQuery.PhraseID).Updates(map[string]interface{}{"status": 3, "update_time": time.Now().Unix()})
+
+	if deletePhraseRes.RowsAffected > 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"c": 0,
+			"d": "",
+			"m": "",
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"c": 11001,
+			"d": "",
+			"m": "Nonexistent",
+		})
+	}
+}
+
+func PatchPhrase(c *gin.Context, db *gorm.DB) {
+	type patchPrase struct {
+		PhraseID int `form:"id" json:"id" binding:"required"`
+		Text string `form:"text" json:"text"`
+		Status int `form:"status" json:"status"`
+	}
+
+	var patchPhraseReq patchPrase
+
+	if err := c.ShouldBind(&patchPhraseReq); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"c": 2,
+			"d": "",
+			"m": "phrase_id is required!",
+		})
+		return
+	}
+
+	isValidate := utils.ValidateText(patchPhraseReq.Text)
+
+	if isValidate {
+		db.Debug().Table("phrase_models").Where("phrase_id = ?", patchPhraseReq.PhraseID).Updates(map[string]interface{}{"text": patchPhraseReq.Text, "update_time": time.Now().Unix()})
+	}
+
+	if patchPhraseReq.Status > 0 {
+		db.Debug().Table("phrase_models").Where("phrase_id = ?", patchPhraseReq.PhraseID).Updates(map[string]interface{}{"status": patchPhraseReq.Status, "update_time": time.Now().Unix()})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": "",
+		"m": "",
+	})
+
+}
