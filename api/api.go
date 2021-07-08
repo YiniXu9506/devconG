@@ -43,6 +43,16 @@ type topNPhrasesWithDistribution struct {
 	Distributions []distribution `json:"distributions"`
 }
 
+type PagiInfo struct {
+	Total int `json:"total"`
+	Offset int `json:"offset"`
+}
+
+type allPhrasesWithDistributionResponse struct {
+	Pagi PagiInfo `json:"pagi"`
+	List []allPhrasesWithDistribution `json:"list"`
+}
+
 // return phrases to wechat
 func GetSrollingPhrases(c *gin.Context, db *gorm.DB, cachePhrases *model.CachePhrases) {
 	const defaultLimit = "100"
@@ -171,7 +181,12 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 
 	var phrasesWithDistribution []allPhrasesWithDistribution
 
+	var allPhrasesResponse allPhrasesWithDistributionResponse
+
 	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Offset(offset).Find(&phraseList)
+
+	allPhrasesResponse.Pagi.Total = len(phraseList)
+	allPhrasesResponse.Pagi.Offset = offset
 
 	for _, phrase := range phraseList {
 		var temp allPhrasesWithDistribution
@@ -189,9 +204,11 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 		phrasesWithDistribution = append(phrasesWithDistribution, temp)
 	}
 
+	allPhrasesResponse.List = phrasesWithDistribution
+
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
-		"d": phrasesWithDistribution,
+		"d": allPhrasesResponse,
 		"m": "",
 	})
 }
@@ -225,6 +242,26 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 
 		temp.PhraseID = phrase.PhraseID
 		temp.Text = topPhraseTextItem.Text
+
+		distributionIDs := make(map[int]bool)
+
+		for _, dist := range distributions {
+			distributionIDs[dist.GroupID] = true
+		}
+
+		fmt.Printf("distributionIDs %v\n", distributionIDs)
+
+		for i := 0; i < 5; i++ {
+			if _, ok := distributionIDs[i+1]; !ok {
+				var temp distribution
+				temp.GroupID = i+1
+				temp.Clicks = 0
+				distributions = append(distributions,temp)
+			}
+		}
+
+		fmt.Printf("\n")
+
 		temp.Distributions = distributions
 
 		topNPhrasesWithDistributions = append(topNPhrasesWithDistributions, temp)

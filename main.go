@@ -10,6 +10,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/cors"
 	"github.com/spf13/viper"
 )
 
@@ -56,6 +57,9 @@ func main() {
 	}
 
 	go model.UpdateStats(db, cachePhrases)
+
+	r.Use(cors.Default())
+
 	r.GET("/phrases", func(c *gin.Context) {
 		api.GetSrollingPhrases(c, db, cachePhrases)
 	})

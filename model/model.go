@@ -138,7 +138,7 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 	// get more random phrase if de-duplicate topNPhrases and newestPhrases
 	for len(allIDs) < limit {
 		delta := limit - len(allIDs)
-		randomPhrasesRes := db.Raw("SELECT * FROM phrase_models where status = 1 ORDER BY RAND() LIMIT ?", delta).Scan(&randomPhrases)
+		randomPhrasesRes := db.Raw("SELECT * FROM phrase_models where status = 2 ORDER BY RAND() LIMIT ?", delta).Scan(&randomPhrases)
 		if randomPhrasesRes.Error != nil {
 			fmt.Printf("error")
 			return
