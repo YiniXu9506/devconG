@@ -92,7 +92,7 @@ func AddPhrase(c *gin.Context, db *gorm.DB) {
 
 	if isValidate {
 		if findRes.RowsAffected == 0 {
-			ceateRes := db.Table("phrase_models").Create(&model.PhraseModel{Text: newPhrase.Text, OpenID: newPhrase.OpenID, GroupID: newPhrase.GroupID, Status: 1, CreateTime: time.Now(), UpdateTime: time.Now()})
+			ceateRes := db.Table("phrase_models").Create(&model.PhraseModel{Text: newPhrase.Text, OpenID: newPhrase.OpenID, GroupID: newPhrase.GroupID, Status: 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()})
 			if ceateRes.Error != nil {
 				fmt.Printf("Insert new phrase failed, %v", ceateRes.Error)
 			}
@@ -140,7 +140,7 @@ func UpdateClickedPhrase(c *gin.Context, db *gorm.DB) {
 		res := db.Table("phrase_models").Where(&model.PhraseModel{PhraseID: phrase_id}).Find(&resDB)
 
 		if res.RowsAffected > 0 {
-			res1 := db.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now()})
+			res1 := db.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now().Unix()})
 			if res1.Error != nil {
 				fmt.Printf("Error %v", res1.Error)
 			}
@@ -199,6 +199,22 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 		temp.Status = phrase.Status
 		temp.CreateTime = phrase.CreateTime
 		temp.UpdateTime = phrase.UpdateTime
+
+		distributionIDs := make(map[int]bool)
+
+		for _, dist := range distributions {
+			distributionIDs[dist.GroupID] = true
+		}
+
+		for i := 0; i < 5; i++ {
+			if _, ok := distributionIDs[i+1]; !ok {
+				var temp distribution
+				temp.GroupID = i+1
+				temp.Clicks = 0
+				distributions = append(distributions,temp)
+			}
+		}
+
 		temp.Distributions = distributions
 
 		phrasesWithDistribution = append(phrasesWithDistribution, temp)
@@ -249,8 +265,6 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 			distributionIDs[dist.GroupID] = true
 		}
 
-		fmt.Printf("distributionIDs %v\n", distributionIDs)
-
 		for i := 0; i < 5; i++ {
 			if _, ok := distributionIDs[i+1]; !ok {
 				var temp distribution
@@ -259,8 +273,6 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 				distributions = append(distributions,temp)
 			}
 		}
-
-		fmt.Printf("\n")
 
 		temp.Distributions = distributions
 

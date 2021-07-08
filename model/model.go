@@ -17,7 +17,7 @@ type PhraseClickModel struct {
 	OpenID    string    `json:"open_id"`
 	PhraseID  int       `json:"phrase_id"`
 	Clicks    int       `json:"clicks"`
-	ClickTime time.Time `json:"click_time"`
+	ClickTime int64 `json:"click_time"`
 }
 
 // table `phrase_model` schema
@@ -27,8 +27,8 @@ type PhraseModel struct {
 	GroupID    int       `json:"group_id"`
 	OpenID     string    `json:"open_id"`
 	Status     int       `json:"status"`
-	CreateTime time.Time `json:"create_time"`
-	UpdateTime   time.Time `json:"update_time"`
+	CreateTime int64 `json:"create_time"`
+	UpdateTime   int64 `json:"update_time"`
 }
 
 // API `/phrases` return phraseItem
@@ -46,7 +46,7 @@ type CachePhrases struct {
 }
 
 type PhraseUpdateTime struct {
-	ClickTime time.Time `json:"click_time"`
+	ClickTime int64 `json:"click_time"`
 }
 
 func getReturnPhraseCount(limit int, reviewedPhraseCount int, db *gorm.DB) (int, int, int) {
