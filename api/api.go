@@ -186,7 +186,7 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 	var returnTotalCount []model.PhraseModel
 
 	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Find(&returnTotalCount)
-	db.Debug().Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Offset(offset).Find(&phraseList)
+	db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", finalStatus[0]), sql.Named("status2", finalStatus[1]), sql.Named("status3", finalStatus[2])).Order("create_time desc").Limit(limit).Offset(offset).Find(&phraseList)
 
 	allPhrasesResponse.Pagi.Total = len(returnTotalCount)
 	allPhrasesResponse.Pagi.Offset = offset
@@ -344,11 +344,11 @@ func PatchPhrase(c *gin.Context, db *gorm.DB) {
 	isValidate := utils.ValidateText(patchPhraseReq.Text)
 
 	if isValidate {
-		db.Debug().Table("phrase_models").Where("phrase_id = ?", patchPhraseReq.PhraseID).Updates(map[string]interface{}{"text": patchPhraseReq.Text, "update_time": time.Now().Unix()})
+		db.Table("phrase_models").Where("phrase_id = ?", patchPhraseReq.PhraseID).Updates(map[string]interface{}{"text": patchPhraseReq.Text, "update_time": time.Now().Unix()})
 	}
 
 	if patchPhraseReq.Status > 0 && patchPhraseReq.Status < 3 {
-		db.Debug().Table("phrase_models").Where("phrase_id = ?", patchPhraseReq.PhraseID).Updates(map[string]interface{}{"status": patchPhraseReq.Status, "update_time": time.Now().Unix()})
+		db.Table("phrase_models").Where("phrase_id = ?", patchPhraseReq.PhraseID).Updates(map[string]interface{}{"status": patchPhraseReq.Status, "update_time": time.Now().Unix()})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
