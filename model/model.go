@@ -12,23 +12,23 @@ import (
 
 // table `phrase_click_model` schema
 type PhraseClickModel struct {
-	ID        int       `gorm:"primaryKey" json:"id"`
-	GroupID   int       `json:"group_id"`
-	OpenID    string    `json:"open_id"`
-	PhraseID  int       `json:"phrase_id"`
-	Clicks    int       `json:"clicks"`
-	ClickTime int64 `json:"click_time"`
+	ID        int    `gorm:"primaryKey" json:"id"`
+	GroupID   int    `json:"group_id"`
+	OpenID    string `json:"open_id"`
+	PhraseID  int    `json:"phrase_id"`
+	Clicks    int    `json:"clicks"`
+	ClickTime int64  `json:"click_time"`
 }
 
 // table `phrase_model` schema
 type PhraseModel struct {
-	PhraseID   int       `gorm:"primaryKey" json:"phrase_id"`
-	Text       string    `json:"text"`
-	GroupID    int       `json:"group_id"`
-	OpenID     string    `json:"open_id"`
-	Status     int       `json:"status"`
-	CreateTime int64 `json:"create_time"`
-	UpdateTime   int64 `json:"update_time"`
+	PhraseID   int    `gorm:"primaryKey" json:"phrase_id"`
+	Text       string `json:"text"`
+	GroupID    int    `json:"group_id"`
+	OpenID     string `json:"open_id"`
+	Status     int    `json:"status"`
+	CreateTime int64  `json:"create_time"`
+	UpdateTime int64  `json:"update_time"`
 }
 
 // API `/phrases` return phraseItem
@@ -109,14 +109,14 @@ func (cp *CachePhrases) updateStats(db *gorm.DB) {
 
 	var reviewedPhraseCount int
 	limit := 100
-	db.Raw("Select count(*) from phrase_models where status=1").Find(&reviewedPhraseCount)
+	db.Raw("Select count(*) from phrase_models where status=2").Find(&reviewedPhraseCount)
 	newestPhrasesCount, topNPhrasesCount, limit := getReturnPhraseCount(limit, reviewedPhraseCount, db)
 
 	// get newest-N phrases
 	newestPhrasesRes := db.Table("phrase_models").Where("status = ?", 2).Order("update_time desc").Limit(newestPhrasesCount).Find(&newestPhrases)
 
 	// get top-N click phrases
-	topNPhrasesRes := db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 1 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).Scan(&topPhrases)
+	topNPhrasesRes := db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).Scan(&topPhrases)
 
 	// de-duplicate phrase
 	allIDs := make(map[int]bool)

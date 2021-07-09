@@ -1,12 +1,12 @@
 package api
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-	"database/sql"
 
 	"github.com/YiniXu9506/devconG/model"
 	"github.com/YiniXu9506/devconG/utils"
@@ -44,12 +44,12 @@ type topNPhrasesWithDistribution struct {
 }
 
 type PagiInfo struct {
-	Total int `json:"total"`
+	Total  int `json:"total"`
 	Offset int `json:"offset"`
 }
 
 type allPhrasesWithDistributionResponse struct {
-	Pagi PagiInfo `json:"pagi"`
+	Pagi PagiInfo                     `json:"pagi"`
 	List []allPhrasesWithDistribution `json:"list"`
 }
 
@@ -212,9 +212,9 @@ func GetAllPhrases(c *gin.Context, db *gorm.DB) {
 		for i := 0; i < 5; i++ {
 			if _, ok := distributionIDs[i+1]; !ok {
 				var temp distribution
-				temp.GroupID = i+1
+				temp.GroupID = i + 1
 				temp.Clicks = 0
-				distributions = append(distributions,temp)
+				distributions = append(distributions, temp)
 			}
 		}
 
@@ -243,7 +243,7 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 	}
 
 	type topPhraseText struct {
-		Text       string    `json:"text"`
+		Text string `json:"text"`
 	}
 
 	var topPhraseIDList []topPhraseID
@@ -271,9 +271,9 @@ func GetTopNPhrases(c *gin.Context, db *gorm.DB) {
 		for i := 0; i < 5; i++ {
 			if _, ok := distributionIDs[i+1]; !ok {
 				var temp distribution
-				temp.GroupID = i+1
+				temp.GroupID = i + 1
 				temp.Clicks = 0
-				distributions = append(distributions,temp)
+				distributions = append(distributions, temp)
 			}
 		}
 
@@ -306,8 +306,6 @@ func DeletePhrase(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
-	fmt.Printf("idQuery %v\n", idQuery.PhraseID)
-
 	deletePhraseRes := db.Table("phrase_models").Where("phrase_id = ?", idQuery.PhraseID).Updates(map[string]interface{}{"status": 3, "update_time": time.Now().Unix()})
 
 	if deletePhraseRes.RowsAffected > 0 {
@@ -327,9 +325,9 @@ func DeletePhrase(c *gin.Context, db *gorm.DB) {
 
 func PatchPhrase(c *gin.Context, db *gorm.DB) {
 	type patchPrase struct {
-		PhraseID int `form:"id" json:"id" binding:"required"`
-		Text string `form:"text" json:"text"`
-		Status int `form:"status" json:"status"`
+		PhraseID int    `form:"id" json:"id" binding:"required"`
+		Text     string `form:"text" json:"text"`
+		Status   int    `form:"status" json:"status"`
 	}
 
 	var patchPhraseReq patchPrase
@@ -349,7 +347,7 @@ func PatchPhrase(c *gin.Context, db *gorm.DB) {
 		db.Debug().Table("phrase_models").Where("phrase_id = ?", patchPhraseReq.PhraseID).Updates(map[string]interface{}{"text": patchPhraseReq.Text, "update_time": time.Now().Unix()})
 	}
 
-	if patchPhraseReq.Status > 0 {
+	if patchPhraseReq.Status > 0 && patchPhraseReq.Status < 3 {
 		db.Debug().Table("phrase_models").Where("phrase_id = ?", patchPhraseReq.PhraseID).Updates(map[string]interface{}{"status": patchPhraseReq.Status, "update_time": time.Now().Unix()})
 	}
 
