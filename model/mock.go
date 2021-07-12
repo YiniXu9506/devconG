@@ -33,7 +33,7 @@ func MockPhrase(n int, db *gorm.DB) {
 			OpenID:     fmt.Sprintf("%d", (rand.Intn(5)+1)*100),
 			Status:     rand.Intn(3) + 1,
 			CreateTime: time.Now().Unix(),
-			UpdateTime:  time.Now().Unix(),
+			UpdateTime: time.Now().Unix(),
 		}
 
 		db.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(&phrase)

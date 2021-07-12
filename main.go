@@ -3,27 +3,31 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
 
-	"github.com/YiniXu9506/devconG/api"
-	"github.com/YiniXu9506/devconG/model"
+	"github.com/YiniXu9506/devconG/log"
+	"github.com/YiniXu9506/devconG/service"
 	"github.com/YiniXu9506/devconG/utils"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/gin-gonic/gin"
 	"github.com/gin-contrib/cors"
+	ginzap "github.com/gin-contrib/zap"
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 var config *viper.Viper
+var configFileName = flag.String("f", "config", "customize the filename.")
+var hostName = flag.String("h", "127.0.0.1", "Connect to host.")
+var port = flag.Int("P", 4000, "Port number to use for connection or 0 for default to.")
 
 func initConfigure(configFileName string) *viper.Viper {
 	v := viper.New()
-	fmt.Printf("filaname %v\n", configFileName)
 
 	v.SetConfigName(configFileName) // name of config file (without extension)
 	v.SetConfigType("json")         // REQUIRED if the config file does not have the extension in the name
 	v.AddConfigPath("./")           // path to look for the config file in
-	v.Set("verbose", true)          // 设置默认参数
 
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -41,60 +45,25 @@ func initConfigure(configFileName string) *viper.Viper {
 	return v
 }
 
+func init() {
+	// initial log
+	log.SetLogs(zap.DebugLevel, log.LOGFORMAT_CONSOLE, "./server.log")
+}
+
 func main() {
-	var configFileName = flag.String("f", "config", "customize the filename")
+	// TODO: add flags for database connection and period to
+	flag.Parse()
 	config = initConfigure(*configFileName)
-	viper.SetDefault("ContentDir", "content")
-	viper.SetDefault("LayoutDir", "layouts")
-	viper.SetDefault("Taxonomies", map[string]string{"tag": "tags", "category": "categories"})
 
 	r := gin.Default()
+	r.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
+	r.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
-	db := utils.TiDBConnect()
-
-	cachePhrases := &model.CachePhrases{
-		PhraseList: make([]model.PhraseItem, 0, 100),
-	}
-
-	go model.UpdateStats(db, cachePhrases)
+	db := utils.TiDBConnect(*hostName, *port)
+	service := service.NewService(db, config)
+	service.Start(r)
 
 	r.Use(cors.Default())
-
-	r.GET("/phrases", func(c *gin.Context) {
-		api.GetSrollingPhrases(c, db, cachePhrases)
-	})
-
-	r.POST("/phrase", func(c *gin.Context) {
-		api.AddPhrase(c, db)
-	})
-
-	r.POST("/phrase_hot", func(c *gin.Context) {
-		api.UpdateClickedPhrase(c, db)
-	})
-
-	r.GET("/phrases_full", func(c *gin.Context) {
-		api.GetAllPhrases(c, db)
-	})
-
-	r.GET("/top_phrases", func(c *gin.Context) {
-		api.GetTopNPhrases(c, db)
-	})
-
-	r.DELETE("/phrase", func(c *gin.Context) {
-		api.DeletePhrase(c, db)
-	})
-
-	r.PATCH("/phrase", func(c *gin.Context) {
-		api.PatchPhrase(c, db)
-	})
-
-	r.GET("/h5_settings", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"c": 0,
-			"d": config.AllSettings(),
-			"m": "",
-		})
-	})
 
 	r.Run()
 }

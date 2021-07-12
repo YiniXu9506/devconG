@@ -1,5 +1,5 @@
 {
-    "polling_interval": 10,
+    "polling_interval": 20,
     "phrases_limit": 100,
     "lt_clicks_size": [
         {
