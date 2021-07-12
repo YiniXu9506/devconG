@@ -112,24 +112,24 @@ func (s *Service) AddPhraseHandler(c *gin.Context) {
 		return
 	}
 
-	ceateRes := s.db.Table("phrase_models").Create(&model.PhraseModel{Text: req.Text, OpenID: req.OpenID, GroupID: req.GroupID, Status: 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()})
-	if ceateRes.Error != nil {
-		mysqlErr := &mysql.MySQLError{}
-		if errors.As(ceateRes.Error, &mysqlErr) && mysqlErr.Number == 1062 {
-			c.JSON(http.StatusForbidden, gin.H{
-				"c": 10001,
-				"d": "",
-				"m": ceateRes.Error.Error(),
-			})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"c": 1,
-				"d": "",
-				"m": ceateRes.Error.Error(),
-			})
-		}
-		return
-	}
+	if err := s.db.Table("phrase_models").
+				Create(&model.PhraseModel{Text: req.Text, OpenID: req.OpenID, GroupID: req.GroupID, Status: 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()}).Error; err != nil {
+					mysqlErr := &mysql.MySQLError{}
+					if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+						c.JSON(http.StatusBadRequest, gin.H{
+							"c": 10001,
+							"d": "",
+							"m": "An existing item already exists",
+						})
+					} else {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"c": 1,
+							"d": "",
+							"m": err.Error(),
+						})
+					}
+					return
+				}
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
@@ -167,19 +167,26 @@ func (s *Service) UpdateClickedPhraseHandler(c *gin.Context) {
 		group_id := phrase.GroupID
 
 		// check validation of phrase in phrase_models
-		phraseRecordRe := s.db.Debug().Table("phrase_models").Where("phrase_id = ? AND status = ?", phrase_id, 2).Find(&phraseRecord)
+		phraseRecordRe := s.db.Table("phrase_models").Where("phrase_id = ? AND status = ?", phrase_id, 2).Find(&phraseRecord)
 
-		//fmt.Printf("phraseRecordCount %v\n", phraseRecord)
-		//zap.L().Sugar().Debugf("phraseRecordCount %v\n", phraseRecord)
+		if phraseRecordRe.Error != nil {
+			zap.L().Sugar().Error("Error! Check validation of phrase in phrase_models:", phraseRecordRe.Error)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"c": 1,
+				"d": "",
+				"m": phraseRecordRe.Error.Error(),
+			})
+			return
+		}
 
+		// if find the reviewed phrase exist in phrase_models, then insert the click stats
 		if phraseRecordRe.RowsAffected > 0 {
-			res := s.db.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now().Unix()})
-			if res.Error != nil {
-				zap.L().Sugar().Infof("Failed to update phrase click model %v", res.Error)
+			if err := s.db.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now().Unix()}).Error; err != nil {
+				zap.L().Sugar().Error("Error! Failed to update phrase click model: ", err)
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"c": 1,
 					"d": "",
-					"m": res.Error.Error(),
+					"m": err.Error(),
 				})
 				return
 			}
@@ -222,26 +229,55 @@ func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
 
 	var phraseTotalCount int
 
-	//TODO: error handling
-	if err := s.db.Table("phrase_models").Select("count(*)").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", statusMap[0]), sql.Named("status2", statusMap[1]), sql.Named("status3", statusMap[2])).Find(&phraseTotalCount).Error; err != nil {
-		zap.L().Sugar().Errorf("select meet error %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"c": 1,
-			"d": "",
-			"m": err.Error(),
-		})
-		return
-	}
-	//TODO: error handling
-	s.db.Table("phrase_models").Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", statusMap[0]), sql.Named("status2", statusMap[1]), sql.Named("status3", statusMap[2])).Order("create_time desc").Limit(limit).Offset(offset).Find(&phraseList)
+	// get total counts of phrases
+	if err := s.db.Table("phrase_models").
+				Select("count(*)").
+				Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", statusMap[0]), sql.Named("status2", statusMap[1]), sql.Named("status3", statusMap[2])).
+				Find(&phraseTotalCount).Error; err != nil {
+					zap.L().Sugar().Error("Error! Get total counts of phrases: ", err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"c": 1,
+						"d": "",
+						"m": err.Error(),
+					})
+					return
+				}
+	// get phrases with limit and offset
+	if err := s.db.Table("phrase_models").
+				Where("status = @status1 OR status = @status2 OR status = @status3", sql.Named("status1", statusMap[0]), sql.Named("status2", statusMap[1]), sql.Named("status3", statusMap[2])).
+				Order("create_time desc").
+				Limit(limit).
+				Offset(offset).
+				Find(&phraseList).Error; err != nil {
+					zap.L().Sugar().Error("Error! Get phrases with limit and offset: ", err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"c": 1,
+						"d": "",
+						"m": err.Error(),
+					})
+					return
+				}
 
 	allPhrasesResp.Pagi.Total = phraseTotalCount
 	allPhrasesResp.Pagi.Offset = offset
 
 	for _, phrase := range phraseList {
 		var phraseWithDistribution phraseWithDistributionModel
-		//TODO: error handling
-		s.db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = @phrase_id", sql.Named("phrase_id", phrase.PhraseID)).Group("group_id").Find(&distributions)
+
+		// get all phrases from phrase_models
+		if err := s.db.Table("phrase_click_models").
+					Select("group_id, SUM(clicks) as clicks").
+					Where("phrase_id = @phrase_id", sql.Named("phrase_id", phrase.PhraseID)).
+					Group("group_id").
+					Find(&distributions).Error; err != nil {
+						zap.L().Sugar().Error("Error! Get all phrases from phrase_models: ", err)
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"c": 1,
+							"d": "",
+							"m": err.Error(),
+						})
+						return
+					}
 		phraseWithDistribution.PhraseID = phrase.PhraseID
 		phraseWithDistribution.Text = phrase.Text
 		phraseWithDistribution.GroupID = phrase.GroupID
@@ -281,18 +317,50 @@ func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
 	var topNPhrasesWithDistributions []topNPhrasesWithDistribution
 
 	// get top N phrases, which are reviewed
-	// WRONG!!
-	//TODO: error handling
-	s.db.Table("phrase_click_models").Select("phrase_id, SUM(clicks) as clicks").Group("phrase_id").Order("clicks desc").Limit(limit).Find(&topPhraseIDs)
+	if err := s.db.Raw("SELECT a.phrase_id, SUM(clicks) as clicks, b.status FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id WHERE b.status = 2 GROUP BY a.phrase_id ORDER BY clicks desc limit @limit", sql.Named("limit", limit)).
+				Find(&topPhraseIDs).Error; err != nil {
+					zap.L().Sugar().Error("Error! Get top N phrases, which are reviewed: ", err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"c": 1,
+						"d": "",
+						"m": err.Error(),
+					})
+					return
+				}
 
 	for _, phrase := range topPhraseIDs {
 		var distributions []distributionModel
 		var topPhraseText textModel
 		var phraseWithDistribution topNPhrasesWithDistribution
-		//TODO: error handling
-		s.db.Table("phrase_click_models").Select("group_id, SUM(clicks) as clicks").Where("phrase_id = ?", phrase.PhraseID).Group("group_id").Find(&distributions)
-		//TODO: error handling
-		s.db.Table("phrase_models").Select("text").Where("phrase_id = ?", phrase.PhraseID).Find(&topPhraseText)
+
+		// get top N phrases from phrase_models
+		if err := s.db.Table("phrase_click_models").
+					Select("group_id, SUM(clicks) as clicks").
+					Where("phrase_id = ?", phrase.PhraseID).
+					Group("group_id").
+					Find(&distributions).Error; err != nil {
+						zap.L().Sugar().Error("Error! Get top N phrases from phrase_models: ", err)
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"c": 1,
+							"d": "",
+							"m": err.Error(),
+						})
+						return
+					}
+
+		// get text of top N phrases from phrase_models
+		if err := s.db.Table("phrase_models").
+				Select("text").
+				Where("phrase_id = ?", phrase.PhraseID).
+				Find(&topPhraseText).Error; err != nil {
+					zap.L().Sugar().Error("Error! Get text of top N phrases from phrase_models: ", err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"c": 1,
+						"d": "",
+						"m": err.Error(),
+					})
+					return
+				}
 
 		phraseWithDistribution.PhraseID = phrase.PhraseID
 		phraseWithDistribution.Text = topPhraseText.Text
@@ -325,10 +393,13 @@ func (s *Service) DeletePhraseHandler(c *gin.Context) {
 		})
 		return
 	}
-	//TODO: error handling
-	deletePhraseRes := s.db.Table("phrase_models").Where("phrase_id = ?", req.PhraseID).Updates(map[string]interface{}{"status": 3, "update_time": time.Now().Unix()})
+
+	deletePhraseRes := s.db.Table("phrase_models").
+						Where("phrase_id = ?", req.PhraseID).
+						Updates(map[string]interface{}{"status": 3, "update_time": time.Now().Unix()})
+
 	if deletePhraseRes.Error != nil {
-		zap.L().Sugar().Error("delete meet error", deletePhraseRes.Error)
+		zap.L().Sugar().Error("Error! Delete phrase: ", deletePhraseRes.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"c": 1,
 			"d": "",
@@ -336,8 +407,9 @@ func (s *Service) DeletePhraseHandler(c *gin.Context) {
 		})
 		return
 	}
+
 	if deletePhraseRes.RowsAffected == 0 {
-		c.JSON(http.StatusOK, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"c": 11001,
 			"d": "",
 			"m": "Nonexistent",
@@ -371,12 +443,18 @@ func (s *Service) PatchPhraseHandler(c *gin.Context) {
 		})
 		return
 	}
-	// refine error structure
 
 	// check whether the phrase exist or not
-	// TODO: error handling
 	phraseRes := s.db.Table("phrase_models").Where("phrase_id = ?", req.PhraseID).Find(&row)
-	// phraseRes.Error != nil{}
+	if phraseRes.Error != nil {
+		zap.L().Sugar().Error("Error! Get phrase to update its text or status", phraseRes.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"c": 1,
+			"d": "",
+			"m": phraseRes.Error.Error(),
+		})
+		return
+	}
 
 	if phraseRes.RowsAffected == 0 {
 		c.JSON(http.StatusOK, gin.H{
@@ -400,8 +478,19 @@ func (s *Service) PatchPhraseHandler(c *gin.Context) {
 		updates["status"] = req.Status
 		updates["update_time"] = time.Now().Unix()
 	}
+
 	if len(updates) > 0 {
-		s.db.Table("phrase_models").Where("phrase_id = ?", req.PhraseID).Updates(updates)
+		if err := s.db.Table("phrase_models").
+					Where("phrase_id = ?", req.PhraseID).
+					Updates(updates).Error; err != nil {
+						zap.L().Sugar().Error("Error! Update phrase text or status", err)
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"c": 1,
+							"d": "",
+							"m": err.Error(),
+						})
+						return
+					}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
@@ -412,7 +501,7 @@ func (s *Service) PatchPhraseHandler(c *gin.Context) {
 
 // get phrase font-size and speed
 func (s *Service) GetH5SettingHandler(c *gin.Context) {
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": s.config.AllSettings(),
 		"m": "",

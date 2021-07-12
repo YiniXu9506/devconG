@@ -2,7 +2,6 @@ package provider
 
 import (
 	"database/sql"
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -93,24 +92,30 @@ func (cp *PhrasesCacheProvider) updateCache() {
 
 	var reviewedPhraseCount int
 	limit := 100
-	cp.db.Raw("Select count(*) from phrase_models where status=2").Find(&reviewedPhraseCount)
+	if err := cp.db.Raw("Select count(*) from phrase_models where status=2").
+				Find(&reviewedPhraseCount).Error; err != nil {
+					zap.L().Sugar().Error("Error! Select reviewed phrases counts: ", err)
+					return
+				}
+
 	newestPhrasesCount, topNPhrasesCount, limit := getReturnPhraseCount(limit, reviewedPhraseCount, cp.db)
 
 	// get newest-N phrases
-	newestPhrasesRes := cp.db.Table("phrase_models").Where("status = ?", 2).Order("update_time desc").Limit(newestPhrasesCount).Find(&newestPhrases)
+	if err := cp.db.Table("phrase_models").
+				Where("status = ?", 2).
+			  	Order("update_time desc").
+			 	Limit(newestPhrasesCount).
+			  	Find(&newestPhrases).Error; err != nil {
+					zap.L().Sugar().Error("Error! Get newest-N phrases: ", err)
+					return
+			 	}
 
 	// get top-N click phrases
-	topNClicksPhrasesRes := cp.db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).Scan(&topClicksPhrases)
-
-	if newestPhrasesRes.Error != nil {
-		fmt.Printf("Failed to get newest phrases from db: %v", newestPhrasesRes.Error)
-		return
-	}
-
-	if topNClicksPhrasesRes.Error != nil {
-		fmt.Printf("Failed to get top N clicks phrases from db: %v", topNClicksPhrasesRes.Error)
-		return
-	}
+	if err := cp.db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
+			  Scan(&topClicksPhrases).Error; err != nil {
+					zap.L().Sugar().Error("Error! Get top N clicks phrases: ", err)
+					return
+				}
 
 	// de-duplicate phrase
 	allIDs := make(map[int]bool)
@@ -132,12 +137,12 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	// get more random phrase if de-duplicate topNPhrases and newestPhrases
 	for len(allIDs) < limit {
 		delta := limit - len(allIDs)
-		randomPhrasesRes := cp.db.Raw("SELECT * FROM phrase_models where status = 2 ORDER BY RAND() LIMIT ?", delta).Scan(&randomPickPhrases)
-		if randomPhrasesRes.Error != nil {
-			//TODO: error handling
-			zap.L().Sugar().Error("meet error", randomPhrasesRes.Error)
-			return
-		}
+		if err := cp.db.Raw("SELECT * FROM phrase_models where status = 2 ORDER BY RAND() LIMIT ?", delta).
+					Scan(&randomPickPhrases).Error; err != nil {
+						zap.L().Sugar().Error("Error! Get random phrases: ", err)
+						return
+					}
+
 		for _, item := range randomPickPhrases {
 			if res, ok := allIDs[item.PhraseID]; !ok || !res {
 				allIDSorted = append(allIDSorted, item.PhraseID)
@@ -157,23 +162,63 @@ func (cp *PhrasesCacheProvider) updateCache() {
 		}
 		var phraseUpdateTime phraseUpdateTimeModel
 
-		cp.db.Table("phrase_models").Select("phrase_id, text").Where("phrase_id = ?", id).Find(&phrase)
+		if err := cp.db.Table("phrase_models").
+					Select("phrase_id, text").
+					Where("phrase_id = ?", id).
+					Find(&phrase).Error; err != nil {
+						zap.L().Sugar().Error("Error! Retrive phrase from db: ", err)
+						return
+					}
 
 		// find out which group has top clicks on specific phrase
 		//TODO: error handling
-		cp.db.Table("phrase_click_models").Select("sum(clicks) as clicks, phrase_id, group_id").Where("phrase_id = ?", id).Group("phrase_id, group_id").Order("clicks desc").Limit(1).Find(&topClickGroup)
+		if err := cp.db.Table("phrase_click_models").
+					Select("sum(clicks) as clicks, phrase_id, group_id").
+					Where("phrase_id = ?", id).
+					Group("phrase_id, group_id").
+					Order("clicks desc").
+					Limit(1).
+					Find(&topClickGroup).Error; err != nil {
+						zap.L().Sugar().Error("Error! Retrive top clicks group: ", err)
+						return
+					}
 
 		if topClickGroup.GroupID == 0 {
 			// if this phrase has not been clicked, the group_id will be the poster belongs to.
-			cp.db.Table("phrase_models").Select("group_id").Where("phrase_id = ?", id).Find(&phraseRecord)
+			if err := cp.db.Table("phrase_models").
+						Select("group_id").Where("phrase_id = ?", id).
+						Find(&phraseRecord).Error; err != nil {
+							zap.L().Sugar().Error("Error! Get the groupID if the phrase has not been clicked: ", err)
+							return
+						}
 			topClickGroup.GroupID = phraseRecord.GroupID
 		} else {
 			// find out all click counts of a specific phrase
-			cp.db.Table("phrase_click_models").Select("sum(clicks) as clicks, phrase_id").Where("phrase_id = ?", id).Group("phrase_id").Find(&topClickPhrases)
+			if err := cp.db.Table("phrase_click_models").
+						Select("sum(clicks) as clicks, phrase_id").
+						Where("phrase_id = ?", id).
+						Group("phrase_id").
+						Find(&topClickPhrases).Error; err != nil {
+							zap.L().Sugar().Error("Error! Find out all click counts of a specific phrase: ", err)
+							return
+						}
 
 			// update phrase click time
-			cp.db.Table("phrase_click_models").Select("click_time").Where("phrase_id = ?", id).Order("click_time desc").Limit(1).Find(&phraseUpdateTime)
-			cp.db.Table("phrase_models").Where("phrase_id = ?", id).Update("update_time", phraseUpdateTime.ClickTime)
+			if err := cp.db.Table("phrase_click_models").
+						Select("click_time").
+						Where("phrase_id = ?", id).
+						Order("click_time desc").
+						Limit(1).
+						Find(&phraseUpdateTime).Error; err != nil {
+							zap.L().Sugar().Error("Error! Get the newest click time of phrase: ", err)
+							return
+						}
+			if err := cp.db.Table("phrase_models").
+						Where("phrase_id = ?", id).
+						Update("update_time", phraseUpdateTime.ClickTime).Error; err != nil {
+							zap.L().Sugar().Error("Error! Update phrase interactive time: ", err)
+							return
+						}
 		}
 
 		phrase.Clicks = topClickPhrases.Clicks

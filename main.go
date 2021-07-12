@@ -56,14 +56,14 @@ func main() {
 	config = initConfigure(*configFileName)
 
 	r := gin.Default()
+	r.Use(cors.Default())
+
 	r.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
 	r.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
 	db := utils.TiDBConnect(*hostName, *port)
 	service := service.NewService(db, config)
 	service.Start(r)
-
-	r.Use(cors.Default())
 
 	r.Run()
 }
