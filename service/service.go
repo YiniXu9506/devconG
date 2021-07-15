@@ -34,4 +34,5 @@ func (s *Service) Start(r *gin.Engine) {
 	r.GET("/top_phrases", s.GetTopNPhrasesHandler)
 	r.DELETE("/phrase", s.DeletePhraseHandler)
 	r.PATCH("/phrase", s.PatchPhraseHandler)
+	r.OPTIONS("/phrase", s.PatchPhraseHandler)
 }
