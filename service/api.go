@@ -230,6 +230,8 @@ func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
 
 	var phraseTotalCount int
 
+	start := time.Now()
+
 	// get total counts of phrases
 	if err := s.db.Table("phrase_models").
 		Select("count(*)").
@@ -291,6 +293,8 @@ func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
 		allPhrasesWithDistributions = append(allPhrasesWithDistributions, phraseWithDistribution)
 	}
 
+	zap.L().Sugar().Infof("get all phrases cost: %v", time.Since(start))
+
 	allPhrasesResp.List = allPhrasesWithDistributions
 
 	c.JSON(http.StatusOK, gin.H{
@@ -316,6 +320,8 @@ func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
 
 	var topPhraseIDs []topPhraseID
 	var topNPhrasesWithDistributions []topNPhrasesWithDistribution
+
+	start := time.Now()
 
 	// get top N phrases, which are reviewed
 	if err := s.db.Raw("SELECT a.phrase_id, SUM(clicks) as clicks, b.status FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id WHERE b.status = 2 GROUP BY a.phrase_id ORDER BY clicks desc limit @limit", sql.Named("limit", limit)).
@@ -369,6 +375,8 @@ func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
 
 		topNPhrasesWithDistributions = append(topNPhrasesWithDistributions, phraseWithDistribution)
 	}
+
+	zap.L().Sugar().Infof("get top phrase cost: %v", time.Since(start))
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
@@ -530,6 +538,8 @@ func (s *Service) TestPhrasePostHandler(c *gin.Context) {
 		OpenID:  fmt.Sprintf("%d", (rand.Intn(5)+1)*100),
 	}
 
+	start := time.Now()
+
 	if err := s.db.Table("phrase_models").
 		Create(&model.PhraseModel{Text: newPhrase.Text, OpenID: newPhrase.OpenID, GroupID: newPhrase.GroupID, Status: 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()}).Error; err != nil {
 		mysqlErr := &mysql.MySQLError{}
@@ -548,6 +558,8 @@ func (s *Service) TestPhrasePostHandler(c *gin.Context) {
 		}
 		return
 	}
+
+	zap.L().Sugar().Infof("test add new phrase cost: %v", time.Since(start))
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
@@ -577,6 +589,8 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 	open_id := newPhraseClick.OpenID
 	group_id := newPhraseClick.GroupID
 
+	start := time.Now()
+
 	// check validation of phrase in phrase_models
 	phraseRecordRe := s.db.Table("phrase_models").Where("phrase_id = ? AND status = ?", phrase_id, 2).Find(&phraseRecord)
 
@@ -602,6 +616,8 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 			return
 		}
 	}
+
+	zap.L().Sugar().Infof("Test update phrase click cost: %v", time.Since(start))
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,

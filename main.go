@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"time"
 
 	"github.com/YiniXu9506/devconG/log"
 	"github.com/YiniXu9506/devconG/service"
@@ -49,7 +48,7 @@ func initConfigure(configFileName string) *viper.Viper {
 
 func init() {
 	// initial log
-	log.SetLogs(zap.ErrorLevel, log.LOGFORMAT_CONSOLE, "./server.log")
+	log.SetLogs(zap.InfoLevel, log.LOGFORMAT_CONSOLE, "./server.log")
 }
 
 func main() {
@@ -62,7 +61,7 @@ func main() {
 	pprof.Register(r)
 
 	r.Use(cors.Default())
-	r.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
+	//r.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
 	r.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
 	db := utils.TiDBConnect(*hostName, *port)
