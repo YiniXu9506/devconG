@@ -47,7 +47,7 @@ func initConfigure(configFileName string) *viper.Viper {
 
 func init() {
 	// initial log
-	log.SetLogs(zap.DebugLevel, log.LOGFORMAT_CONSOLE, "./server.log")
+	log.SetLogs(zap.ErrorLevel, log.LOGFORMAT_CONSOLE, "./server.log")
 }
 
 func main() {
@@ -55,7 +55,7 @@ func main() {
 	flag.Parse()
 	config = initConfigure(*configFileName)
 
-	r := gin.Default()
+	r := gin.New()
 	r.Use(cors.Default())
 
 	r.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))

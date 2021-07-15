@@ -28,11 +28,12 @@ func (s *Service) Start(r *gin.Engine) {
 	r.POST("/phrase", s.AddPhraseHandler)
 	r.POST("/phrase_hot", s.UpdateClickedPhraseHandler)
 	r.GET("/h5_settings", s.GetH5SettingHandler)
+	r.GET("/test-phrase-post", s.TestPhrasePostHandler)
+	r.GET("/test-phrase-hot-post", s.TestPhraseHotPostHandler)
 
 	// APIs for management portal
 	r.GET("/phrases_full", s.GetAllPhrasesHandler)
 	r.GET("/top_phrases", s.GetTopNPhrasesHandler)
 	r.DELETE("/phrase", s.DeletePhraseHandler)
 	r.PATCH("/phrase", s.PatchPhraseHandler)
-	r.OPTIONS("/phrase", s.PatchPhraseHandler)
 }
