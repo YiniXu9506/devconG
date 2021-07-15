@@ -11,6 +11,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/pprof"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -20,7 +21,8 @@ import (
 var config *viper.Viper
 var configFileName = flag.String("f", "config", "customize the filename.")
 var hostName = flag.String("h", "127.0.0.1", "Connect to host.")
-var port = flag.Int("P", 4000, "Port number to use for connection or 0 for default to.")
+var port = flag.Int("P", 4000, "the database ports.")
+var serverPort = flag.Int("l", 8080, "Port number listenling.")
 
 func initConfigure(configFileName string) *viper.Viper {
 	v := viper.New()
@@ -47,7 +49,7 @@ func initConfigure(configFileName string) *viper.Viper {
 
 func init() {
 	// initial log
-	log.SetLogs(zap.DebugLevel, log.LOGFORMAT_CONSOLE, "./server.log")
+	log.SetLogs(zap.ErrorLevel, log.LOGFORMAT_CONSOLE, "./server.log")
 }
 
 func main() {
@@ -55,7 +57,8 @@ func main() {
 	flag.Parse()
 	config = initConfigure(*configFileName)
 
-	r := gin.Default()
+	r := gin.New()
+	pprof.Register(r)
 	r.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
 	r.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
@@ -65,5 +68,5 @@ func main() {
 
 	r.Use(cors.Default())
 
-	r.Run()
+	r.Run(fmt.Sprintf(":%d", *serverPort))
 }

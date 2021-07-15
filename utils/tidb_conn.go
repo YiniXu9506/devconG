@@ -19,9 +19,9 @@ func TiDBConnect(hostName string, port int) *gorm.DB {
 
 	db.AutoMigrate(&model.PhraseClickModel{}, &model.PhraseModel{})
 
-	// model.MockPhraseClick(50, db)
+	model.MockPhraseClick(50, db)
 
-	// model.MockPhrase(50, db)
+	model.MockPhrase(50, db)
 
 	return db
 }
