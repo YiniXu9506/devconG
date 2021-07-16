@@ -25,6 +25,12 @@ type PhrasesCacheProvider struct {
 	mu            sync.RWMutex
 }
 
+type TopClicksPhraseModel struct {
+	Clicks   int `json:"clicks"`
+	PhraseID int `json:"phrase_id"`
+	GroupID  int `json:"group_id"`
+}
+
 func NewPhrasesCacheProvider(db *gorm.DB) *PhrasesCacheProvider {
 	phraseCache := &PhrasesCacheProvider{
 		db:            db,
@@ -77,22 +83,79 @@ func (cp *PhrasesCacheProvider) GetScrollingPhrases(limit int) []ScrollingPhrase
 	return phrase
 }
 
-func (cp *PhrasesCacheProvider) updateCache() {
-
-	type topClicksPhraseModel struct {
-		Clicks   int `json:"clicks"`
-		PhraseID int `json:"phrase_id"`
-		GroupID  int `json:"group_id"`
+func CacheNPhrases(id int, cp *PhrasesCacheProvider, c chan ScrollingPhrasesResponse) {
+	var phrase ScrollingPhrasesResponse
+	var phraseRecord model.PhraseModel
+	var phraseClicksDistribution []TopClicksPhraseModel
+	var topClickGroup TopClicksPhraseModel
+	totalClicks := 0
+	defer func() {
+		c <- phrase
+	}()
+	if err := cp.db.Table("phrase_models").
+		Select("phrase_id, text").
+		Where("phrase_id = ?", id).
+		Find(&phrase).Error; err != nil {
+		zap.L().Sugar().Error("Error! Retrive phrase from db: ", err)
+		return
 	}
 
-	var scrollingPhrasesRes []ScrollingPhrasesResponse
+	// find out phrase click distributions
+	if err := cp.db.Table("phrase_click_models").
+		Select("sum(clicks) as clicks, phrase_id, group_id").
+		Where("phrase_id = ?", id).
+		Group("phrase_id, group_id").
+		Order("clicks").
+		Find(&phraseClicksDistribution).Error; err != nil {
+		zap.L().Sugar().Error("Error! Retrive top clicks group: ", err)
+		return
+	}
+
+	if len(phraseClicksDistribution) == 0 {
+		// if this phrase has not been clicked, the group_id will be the poster belongs to.
+		if err := cp.db.Table("phrase_models").
+			Select("group_id").Where("phrase_id = ?", id).
+			Find(&phraseRecord).Error; err != nil {
+			zap.L().Sugar().Error("Error! Get the groupID if the phrase has not been clicked: ", err)
+			return
+		}
+		topClickGroup.GroupID = phraseRecord.GroupID
+		totalClicks = 0
+	} else {
+		// sum up clicks for phrase
+		for _, distribution := range phraseClicksDistribution {
+			totalClicks = totalClicks + distribution.Clicks
+		}
+
+		topClickGroup.Clicks = phraseClicksDistribution[0].Clicks
+		topClickGroup.GroupID = phraseClicksDistribution[0].GroupID
+
+		// update phrase show time
+		if err := cp.db.Table("phrase_models").
+			Where("phrase_id = ?", id).
+			Update("update_time", time.Now().Unix()).Error; err != nil {
+			zap.L().Sugar().Error("Error! Update phrase interactive time: ", err)
+			return
+		}
+	}
+
+	phrase.Clicks = totalClicks
+	phrase.HotGroupClicks = topClickGroup.Clicks
+	phrase.HotGroupID = topClickGroup.GroupID
+
+}
+
+func (cp *PhrasesCacheProvider) updateCache() {
+
+	c := make(chan ScrollingPhrasesResponse)
+
 	var newestPhrases, randomPickPhrases []model.PhraseModel
-	var topClicksPhrases []topClicksPhraseModel
+	var topClicksPhrases []TopClicksPhraseModel
 
 	start := time.Now()
 
 	var reviewedPhraseCount int
-	limit := 100
+	limit := 30
 
 	if err := cp.db.Raw("Select count(*) from phrase_models where status=2").
 		Find(&reviewedPhraseCount).Error; err != nil {
@@ -105,7 +168,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	// get newest-N phrases
 	if err := cp.db.Table("phrase_models").
 		Where("status = ?", 2).
-		Order("update_time desc").
+		Order("update_time").
 		Limit(newestPhrasesCount).
 		Find(&newestPhrases).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get newest-N phrases: ", err)
@@ -154,85 +217,20 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	}
 
 	for _, id := range allIDSorted {
-		var phrase ScrollingPhrasesResponse
-		var phraseRecord model.PhraseModel
-		var topClickPhrases topClicksPhraseModel
-		var topClickGroup topClicksPhraseModel
-
-		type phraseUpdateTimeModel struct {
-			ClickTime int64 `json:"click_time"`
-		}
-		var phraseUpdateTime phraseUpdateTimeModel
-
-		if err := cp.db.Table("phrase_models").
-			Select("phrase_id, text").
-			Where("phrase_id = ?", id).
-			Find(&phrase).Error; err != nil {
-			zap.L().Sugar().Error("Error! Retrive phrase from db: ", err)
-			return
-		}
-
-		// find out which group has top clicks on specific phrase
-		if err := cp.db.Table("phrase_click_models").
-			Select("sum(clicks) as clicks, phrase_id, group_id").
-			Where("phrase_id = ?", id).
-			Group("phrase_id, group_id").
-			Order("clicks desc").
-			Limit(1).
-			Find(&topClickGroup).Error; err != nil {
-			zap.L().Sugar().Error("Error! Retrive top clicks group: ", err)
-			return
-		}
-
-		if topClickGroup.GroupID == 0 {
-			// if this phrase has not been clicked, the group_id will be the poster belongs to.
-			if err := cp.db.Table("phrase_models").
-				Select("group_id").Where("phrase_id = ?", id).
-				Find(&phraseRecord).Error; err != nil {
-				zap.L().Sugar().Error("Error! Get the groupID if the phrase has not been clicked: ", err)
-				return
-			}
-			topClickGroup.GroupID = phraseRecord.GroupID
-		} else {
-			// find out all click counts of a specific phrase
-			if err := cp.db.Table("phrase_click_models").
-				Select("sum(clicks) as clicks, phrase_id").
-				Where("phrase_id = ?", id).
-				Group("phrase_id").
-				Find(&topClickPhrases).Error; err != nil {
-				zap.L().Sugar().Error("Error! Find out all click counts of a specific phrase: ", err)
-				return
-			}
-
-			// update phrase click time
-			if err := cp.db.Table("phrase_click_models").
-				Select("click_time").
-				Where("phrase_id = ?", id).
-				Order("click_time desc").
-				Limit(1).
-				Find(&phraseUpdateTime).Error; err != nil {
-				zap.L().Sugar().Error("Error! Get the newest click time of phrase: ", err)
-				return
-			}
-
-			if err := cp.db.Table("phrase_models").
-				Where("phrase_id = ?", id).
-				Update("update_time", phraseUpdateTime.ClickTime).Error; err != nil {
-				zap.L().Sugar().Error("Error! Update phrase interactive time: ", err)
-				return
-			}
-		}
-
-		phrase.Clicks = topClickPhrases.Clicks
-		phrase.HotGroupClicks = topClickGroup.Clicks
-		phrase.HotGroupID = topClickGroup.GroupID
-		scrollingPhrasesRes = append(scrollingPhrasesRes, phrase)
+		go CacheNPhrases(id, cp, c)
 	}
 
+	var phrases []ScrollingPhrasesResponse
+	for _ = range allIDSorted {
+		phrase := <-c
+		if phrase.PhraseID == 0 && len(phrase.Text) == 0 {
+			continue
+		}
+		phrases = append(phrases, phrase)
+	}
 	zap.L().Sugar().Infof("update phrase cache cost: %v", time.Since(start))
-
 	cp.mu.Lock()
-	cp.cachedPhrases = scrollingPhrasesRes
+	cp.cachedPhrases = phrases
 	cp.mu.Unlock()
 }
 
