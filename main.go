@@ -52,7 +52,6 @@ func init() {
 }
 
 func main() {
-	// TODO: add flags for database connection and period to
 	flag.Parse()
 	config = initConfigure(*configFileName)
 

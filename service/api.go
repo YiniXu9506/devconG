@@ -71,7 +71,7 @@ func (s *Service) GetScrollingPhrasesHandler(c *gin.Context) {
 		fmt.Printf("failed to convert string to int")
 		limit = 100
 	}
-	//TODO: error handling
+
 	scrollingPhrasesRes := s.provider.GetScrollingPhrases(limit)
 
 	c.JSON(http.StatusOK, gin.H{

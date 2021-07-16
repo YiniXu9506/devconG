@@ -173,7 +173,6 @@ func (cp *PhrasesCacheProvider) updateCache() {
 		}
 
 		// find out which group has top clicks on specific phrase
-		//TODO: error handling
 		if err := cp.db.Table("phrase_click_models").
 			Select("sum(clicks) as clicks, phrase_id, group_id").
 			Where("phrase_id = ?", id).
