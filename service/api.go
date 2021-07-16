@@ -201,6 +201,44 @@ func (s *Service) UpdateClickedPhraseHandler(c *gin.Context) {
 	})
 }
 
+func (s *Service) AddUserHandler(c *gin.Context) {
+	var req model.UserModel
+	// bind json
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"c": 2,
+			"d": "",
+			"m": "open_id is required!",
+		})
+		return
+	}
+
+	if err := s.db.Table("user_models").
+		Create(&model.UserModel{OpenID: req.OpenID, NickName: req.NickName, Sex: req.Sex, Provice: req.Provice, City: req.City, HeadImgURL: req.HeadImgURL}).Error; err != nil {
+		mysqlErr := &mysql.MySQLError{}
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			c.JSON(http.StatusOK, gin.H{
+				"c": 0,
+				"d": "",
+				"m": "",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"c": 1,
+				"d": "",
+				"m": err.Error(),
+			})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": "",
+		"m": "",
+	})
+}
+
 // get all phrases
 func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
 	defaultLimit := "50"

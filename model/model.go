@@ -21,3 +21,12 @@ type PhraseModel struct {
 	CreateTime int64  `json:"create_time"`
 	UpdateTime int64  `json:"update_time"`
 }
+
+type UserModel struct {
+	OpenID     string `gorm:"primaryKey" json:"open_id" binding:"required"`
+	NickName   string `json:"nick_name"`
+	Sex        int    `json:"sex"`
+	Provice    string `json:"province"`
+	City       string `json:"city"`
+	HeadImgURL string `json:"headimgurl"`
+}

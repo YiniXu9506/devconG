@@ -27,6 +27,7 @@ func (s *Service) Start(r *gin.Engine) {
 	r.GET("/phrases", s.GetScrollingPhrasesHandler)
 	r.POST("/phrase", s.AddPhraseHandler)
 	r.POST("/phrase_hot", s.UpdateClickedPhraseHandler)
+	r.POST("/user", s.AddUserHandler)
 	r.GET("/h5_settings", s.GetH5SettingHandler)
 	r.GET("/test-phrase-post", s.TestPhrasePostHandler)
 	r.GET("/test-phrase-hot-post", s.TestPhraseHotPostHandler)
