@@ -94,7 +94,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	var reviewedPhraseCount int
 	limit := 100
 
-	if err := cp.db.Debug().Raw("Select count(*) from phrase_models where status=2").
+	if err := cp.db.Raw("Select count(*) from phrase_models where status=2").
 		Find(&reviewedPhraseCount).Error; err != nil {
 		zap.L().Sugar().Error("Error! Select reviewed phrases counts: ", err)
 		return
@@ -103,7 +103,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	newestPhrasesCount, topNPhrasesCount, limit := getReturnPhraseCount(limit, reviewedPhraseCount, cp.db)
 
 	// get newest-N phrases
-	if err := cp.db.Debug().Table("phrase_models").
+	if err := cp.db.Table("phrase_models").
 		Where("status = ?", 2).
 		Order("update_time desc").
 		Limit(newestPhrasesCount).
@@ -113,7 +113,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	}
 
 	// get top-N click phrases
-	if err := cp.db.Debug().Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
+	if err := cp.db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
 		Scan(&topClicksPhrases).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get top N clicks phrases: ", err)
 		return
@@ -164,7 +164,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 		}
 		var phraseUpdateTime phraseUpdateTimeModel
 
-		if err := cp.db.Debug().Table("phrase_models").
+		if err := cp.db.Table("phrase_models").
 			Select("phrase_id, text").
 			Where("phrase_id = ?", id).
 			Find(&phrase).Error; err != nil {
@@ -174,7 +174,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 
 		// find out which group has top clicks on specific phrase
 		//TODO: error handling
-		if err := cp.db.Debug().Table("phrase_click_models").
+		if err := cp.db.Table("phrase_click_models").
 			Select("sum(clicks) as clicks, phrase_id, group_id").
 			Where("phrase_id = ?", id).
 			Group("phrase_id, group_id").
@@ -187,7 +187,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 
 		if topClickGroup.GroupID == 0 {
 			// if this phrase has not been clicked, the group_id will be the poster belongs to.
-			if err := cp.db.Debug().Table("phrase_models").
+			if err := cp.db.Table("phrase_models").
 				Select("group_id").Where("phrase_id = ?", id).
 				Find(&phraseRecord).Error; err != nil {
 				zap.L().Sugar().Error("Error! Get the groupID if the phrase has not been clicked: ", err)
@@ -196,7 +196,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 			topClickGroup.GroupID = phraseRecord.GroupID
 		} else {
 			// find out all click counts of a specific phrase
-			if err := cp.db.Debug().Table("phrase_click_models").
+			if err := cp.db.Table("phrase_click_models").
 				Select("sum(clicks) as clicks, phrase_id").
 				Where("phrase_id = ?", id).
 				Group("phrase_id").
@@ -206,7 +206,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 			}
 
 			// update phrase click time
-			if err := cp.db.Debug().Table("phrase_click_models").
+			if err := cp.db.Table("phrase_click_models").
 				Select("click_time").
 				Where("phrase_id = ?", id).
 				Order("click_time desc").
@@ -216,7 +216,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 				return
 			}
 
-			if err := cp.db.Debug().Table("phrase_models").
+			if err := cp.db.Table("phrase_models").
 				Where("phrase_id = ?", id).
 				Update("update_time", phraseUpdateTime.ClickTime).Error; err != nil {
 				zap.L().Sugar().Error("Error! Update phrase interactive time: ", err)

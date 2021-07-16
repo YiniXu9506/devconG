@@ -17,7 +17,7 @@ type PhraseModel struct {
 	Text       string `gorm:"uniqueIndex:text;size:60" json:"text"`
 	GroupID    int    `json:"group_id"`
 	OpenID     string `json:"open_id"`
-	Status     int    `json:"status"`
+	Status     int    `gorm:"index" json:"status"`
 	CreateTime int64  `json:"create_time"`
 	UpdateTime int64  `json:"update_time"`
 }
