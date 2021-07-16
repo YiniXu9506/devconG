@@ -13,7 +13,7 @@ type PhraseClickModel struct {
 
 // table `phrase_model` schema
 type PhraseModel struct {
-	PhraseID   int    `gorm:"primaryKey" json:"phrase_id"`
+	PhraseID   int    `gorm:"primaryKey;index" json:"phrase_id"`
 	Text       string `gorm:"uniqueIndex:text;size:60" json:"text"`
 	GroupID    int    `json:"group_id"`
 	OpenID     string `json:"open_id"`
