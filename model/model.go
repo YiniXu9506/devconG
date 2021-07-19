@@ -3,10 +3,10 @@ package model
 // table `phrase_click_model` schema
 type PhraseClickModel struct {
 	ID        int    `gorm:"primaryKey" json:"id"`
-	GroupID   int    `json:"group_id"`
+	PhraseID  int    `gorm:"index:idx_phrase_click" json:"phrase_id"`
+	GroupID   int    `gorm:"index:idx_phrase_click" json:"group_id"`
 	OpenID    string `json:"open_id"`
-	PhraseID  int    `gorm:"index" json:"phrase_id"`
-	Clicks    int    `json:"clicks"`
+	Clicks    int    `gorm:"index:idx_phrase_click" json:"clicks"`
 	ClickTime int64  `json:"click_time"`
 }
 
