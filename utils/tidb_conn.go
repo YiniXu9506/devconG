@@ -51,11 +51,11 @@ func TiDBConnect(hostName string, port int) *gorm.DB {
 	// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 	sqlDB.SetConnMaxLifetime(time.Hour)
 	// start = time.Now()
-	model.MockPhraseClick(50, db)
+	model.MockPhraseClick(100, db)
 
-	model.MockPhrase(50, db)
+	model.MockPhrase(100, db)
 
-	model.MockUser(50, db)
+	model.MockUser(100, db)
 	// zap.L().Sugar().Infof("mock cost: %v\n", time.Since(start))
 	return db
 }
