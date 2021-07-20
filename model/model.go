@@ -25,7 +25,7 @@ type UserModel struct {
 	OpenID     string `gorm:"primaryKey" json:"open_id" binding:"required"`
 	NickName   string `json:"nick_name"`
 	Sex        int    `json:"sex"`
-	Provice    string `json:"province"`
+	Province   string `json:"province"`
 	City       string `json:"city"`
 	HeadImgURL string `json:"headimgurl"`
 }

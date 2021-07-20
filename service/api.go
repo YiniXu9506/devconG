@@ -214,7 +214,7 @@ func (s *Service) AddUserHandler(c *gin.Context) {
 	}
 
 	if err := s.db.Table("user_models").
-		Create(&model.UserModel{OpenID: req.OpenID, NickName: req.NickName, Sex: req.Sex, Provice: req.Provice, City: req.City, HeadImgURL: req.HeadImgURL}).Error; err != nil {
+		Create(&model.UserModel{OpenID: req.OpenID, NickName: req.NickName, Sex: req.Sex, Province: req.Province, City: req.City, HeadImgURL: req.HeadImgURL}).Error; err != nil {
 		mysqlErr := &mysql.MySQLError{}
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
 			c.JSON(http.StatusOK, gin.H{
@@ -660,6 +660,138 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": "",
+		"m": "",
+	})
+}
+
+func (s *Service) TestUserPostHandler(c *gin.Context) {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	str := make([]byte, 10)
+	for i := range str {
+		str[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+
+	req := model.UserModel{
+		OpenID:     string(str),
+		NickName:   string(str),
+		Sex:        rand.Intn(2) + 1,
+		Province:   fmt.Sprintf("province%d", rand.Intn(10)),
+		City:       string(str),
+		HeadImgURL: string(str),
+	}
+
+	if err := s.db.Table("user_models").
+		Create(&model.UserModel{OpenID: req.OpenID, NickName: req.NickName, Sex: req.Sex, Province: req.Province, City: req.City, HeadImgURL: req.HeadImgURL}).Error; err != nil {
+		mysqlErr := &mysql.MySQLError{}
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			c.JSON(http.StatusOK, gin.H{
+				"c": 0,
+				"d": "",
+				"m": "",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"c": 1,
+				"d": "",
+				"m": err.Error(),
+			})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": "",
+		"m": "",
+	})
+}
+
+func (s *Service) GetUserDistributions(c *gin.Context) {
+
+	// sex stats
+	type sexModel struct {
+		Sex   int `json:"sex"`
+		Count int `json:"count"`
+	}
+	var sexRecords []sexModel
+	if err := s.db.Table("user_models").
+		Select("sex, count(*) as count").
+		Group("sex").
+		Find(&sexRecords).Error; err != nil {
+		zap.L().Sugar().Error("Error! Get user distrbution failed: ", err)
+		return
+	}
+	type sexResponseModel struct {
+		Male   int `json:"male"`
+		Female int `json:"female"`
+		Secret int `json:"secret"`
+	}
+	var sexRes sexResponseModel
+	var totalUser int
+	for _, r := range sexRecords {
+		switch r.Sex {
+		case 1:
+			sexRes.Male = r.Count
+		case 2:
+			sexRes.Female = r.Count
+		case 3:
+			sexRes.Secret = r.Count
+		}
+
+		totalUser += r.Count
+	}
+
+	// location stats
+	type locationModel struct {
+		Province string `json:"province"`
+		Count    int    `json:"count"`
+	}
+	var locations []locationModel
+
+	if err := s.db.Table("user_models").
+		Select("province, count(*) as count").
+		Group("province").
+		Find(&locations).Error; err != nil {
+		zap.L().Sugar().Error("Error! Get user distrbution failed: ", err)
+		return
+	}
+
+	type responseModel struct {
+		TotalUser        int              `json:"total_users"`
+		TotalValidPhrase int              `json:"total_valid_phrases"`
+		TotalClicks      int              `json:"total_clicks"`
+		Sex              sexResponseModel `json:"sex"`
+		Localtions       []locationModel  `json:"locations"`
+	}
+
+	var totalValidPhrase int
+	if err := s.db.Table("phrase_models").
+		Select("count(*)").
+		Where("status = ?", 2).
+		Find(&totalUser).Error; err != nil {
+		zap.L().Sugar().Error("Error! Get total valid phrase failed: ", err)
+		return
+	}
+
+	var totalClicks int
+	if err := s.db.Table("phrase_click_models").
+		Select("count(*)").
+		Find(&totalClicks).Error; err != nil {
+		zap.L().Sugar().Error("Error! Get user distrbution failed: ", err)
+		return
+	}
+	var resp responseModel
+
+	resp.TotalUser = totalUser
+	resp.TotalClicks = totalClicks
+	resp.TotalValidPhrase = totalValidPhrase
+	resp.Sex = sexRes
+	resp.Localtions = locations
+
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": resp,
 		"m": "",
 	})
 }
