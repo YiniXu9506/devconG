@@ -707,15 +707,14 @@ func (s *Service) TestUserPostHandler(c *gin.Context) {
 	})
 }
 
-func (s *Service) GetUserDistributions(c *gin.Context) {
-
+func (s *Service) GetOverviewHandler(c *gin.Context) {
 	// sex stats
 	type sexModel struct {
 		Sex   int `json:"sex"`
 		Count int `json:"count"`
 	}
 	var sexRecords []sexModel
-	if err := s.db.Table("user_models").
+	if err := s.db.Debug().Table("user_models").
 		Select("sex, count(*) as count").
 		Group("sex").
 		Find(&sexRecords).Error; err != nil {
@@ -747,15 +746,29 @@ func (s *Service) GetUserDistributions(c *gin.Context) {
 		Province string `json:"province"`
 		Count    int    `json:"count"`
 	}
-	var locations []locationModel
+	var locationsRecords []locationModel
 
-	if err := s.db.Table("user_models").
+	if err := s.db.Debug().Table("user_models").
 		Select("province, count(*) as count").
 		Group("province").
-		Find(&locations).Error; err != nil {
+		Order("count desc").
+		Limit(5).
+		Find(&locationsRecords).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get user distrbution failed: ", err)
 		return
 	}
+
+	var top5LocationsCount int
+	for _, location := range locationsRecords {
+		top5LocationsCount += location.Count
+	}
+
+	otherLocations := locationModel{
+		Province: "其他",
+		Count:    totalUser - top5LocationsCount,
+	}
+
+	locationsRecords = append(locationsRecords, otherLocations)
 
 	type responseModel struct {
 		TotalUser        int              `json:"total_users"`
@@ -766,7 +779,7 @@ func (s *Service) GetUserDistributions(c *gin.Context) {
 	}
 
 	var totalValidPhrase int
-	if err := s.db.Table("phrase_models").
+	if err := s.db.Debug().Table("phrase_models").
 		Select("count(*)").
 		Where("status = ?", 2).
 		Find(&totalUser).Error; err != nil {
@@ -775,10 +788,10 @@ func (s *Service) GetUserDistributions(c *gin.Context) {
 	}
 
 	var totalClicks int
-	if err := s.db.Table("phrase_click_models").
+	if err := s.db.Debug().Table("phrase_click_models").
 		Select("count(*)").
 		Find(&totalClicks).Error; err != nil {
-		zap.L().Sugar().Error("Error! Get user distrbution failed: ", err)
+		zap.L().Sugar().Error("Error! Get total clicks failed: ", err)
 		return
 	}
 	var resp responseModel
@@ -787,11 +800,15 @@ func (s *Service) GetUserDistributions(c *gin.Context) {
 	resp.TotalClicks = totalClicks
 	resp.TotalValidPhrase = totalValidPhrase
 	resp.Sex = sexRes
-	resp.Localtions = locations
+	resp.Localtions = locationsRecords
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": resp,
 		"m": "",
 	})
+}
+
+func (s *Service) GetClickTrendsHandler(c *gin.Context) {
+
 }

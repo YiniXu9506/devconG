@@ -39,3 +39,25 @@ func MockPhrase(n int, db *gorm.DB) {
 		db.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(&phrase)
 	}
 }
+
+func MockUser(n int, db *gorm.DB) {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	for i := 1; i <= n; i++ {
+		str := make([]byte, 10)
+		for i := range str {
+			str[i] = letterBytes[rand.Intn(len(letterBytes))]
+		}
+
+		user := UserModel{
+			OpenID:     string(str),
+			NickName:   string(str),
+			Sex:        rand.Intn(2) + 1,
+			Province:   fmt.Sprintf("province%d", rand.Intn(10)+1),
+			City:       string(str),
+			HeadImgURL: string(str),
+		}
+
+		db.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(&user)
+	}
+}

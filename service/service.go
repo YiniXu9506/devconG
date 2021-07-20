@@ -40,5 +40,6 @@ func (s *Service) Start(r *gin.Engine) {
 	r.PATCH("/phrase", s.PatchPhraseHandler)
 
 	// API for BI
-	r.GET("/user_distributions", s.GetUserDistributions)
+	r.GET("/overview", s.GetOverviewHandler)
+	r.GET("/click_trends", s.GetClickTrendsHandler)
 }
