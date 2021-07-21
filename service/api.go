@@ -72,7 +72,7 @@ func (s *Service) GetScrollingPhrasesHandler(c *gin.Context) {
 		limit = 100
 	}
 
-	scrollingPhrasesRes := s.provider.GetScrollingPhrases(limit)
+	scrollingPhrasesRes := s.phraseCacheProvider.GetScrollingPhrases(limit)
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
@@ -810,27 +810,42 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 }
 
 func (s *Service) GetClickTrendsHandler(c *gin.Context) {
+
 	type clickTrendsModel struct {
 		Time   string `json:"time"`
 		Clicks int    `json:"clicks"`
 	}
 
-	var clickTrendsResp []clickTrendsModel
-	var currentTimeClicks clickTrendsModel
+	// var clickTrendsResp []clickTrendsModel
+	// var currentTimeClicks clickTrendsModel
 
-	if err := s.db.Debug().Raw("SELECT FROM_UNIXTIME(ceiling(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY ceiling(click_time/600) order by time;").Scan(&clickTrendsResp).Error; err != nil {
+	// if err := s.db.Debug().Raw("SELECT FROM_UNIXTIME(ceiling(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY ceiling(click_time/600) order by time;").Scan(&clickTrendsResp).Error; err != nil {
+	// 	zap.L().Sugar().Error("Error! Get click trends failed: ", err)
+	// 	return
+	// }
+
+	// if err := s.db.Debug().Raw("SELECT FROM_UNIXTIME(floor(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY floor(click_time/600) order by time;").Scan(&clickTrendsResp).Error; err != nil {
+	// 	zap.L().Sugar().Error("Error! Get click trends failed: ", err)
+	// 	return
+	// }
+
+	// fmt.Printf("clickTrendsResp %v", clickTrendsResp)
+
+	// clickTrendsResp = append(clickTrendsResp, currentTimeClicks)
+
+	clickTrendsResp := s.clickTrendsCacheProvider.GetClickTrends()
+
+	var clicks int
+	if err := s.db.Debug().Raw("SELECT sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR)").Scan(&clicks).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get click trends failed: ", err)
 		return
 	}
 
-	if err := s.db.Debug().Raw("SELECT FROM_UNIXTIME(floor(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY floor(click_time/600) order by time;").Scan(&clickTrendsResp).Error; err != nil {
-		zap.L().Sugar().Error("Error! Get click trends failed: ", err)
-		return
-	}
+	// currentTotalClicks := clickTrendsModel{
+	// 	Time: FROM_UNIXTIME(time.Now().Unix(), "%T"),
+	// }
 
-	fmt.Printf("clickTrendsResp %v", clickTrendsResp)
-
-	clickTrendsResp = append(clickTrendsResp, currentTimeClicks)
+	// fmt.Printf("currentTotalClicks %v\n", currentTotalClicks)
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,

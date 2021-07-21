@@ -8,17 +8,21 @@ import (
 )
 
 type Service struct {
-	db       *gorm.DB
-	provider *provider.PhrasesCacheProvider
-	config   *viper.Viper
+	db                       *gorm.DB
+	phraseCacheProvider      *provider.PhrasesCacheProvider
+	clickTrendsCacheProvider *provider.ClickTrendsCacheProvider
+	config                   *viper.Viper
 }
 
 func NewService(db *gorm.DB, config *viper.Viper) *Service {
-	provider := provider.NewPhrasesCacheProvider(db)
+	phraseCacheProvider := provider.NewPhrasesCacheProvider(db)
+	clickTrendsCacheProvider := provider.NewClickTrendsCacheProvider(db)
+
 	return &Service{
-		db:       db,
-		provider: provider,
-		config:   config,
+		db:                       db,
+		phraseCacheProvider:      phraseCacheProvider,
+		clickTrendsCacheProvider: clickTrendsCacheProvider,
+		config:                   config,
 	}
 }
 

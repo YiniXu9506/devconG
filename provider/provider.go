@@ -31,6 +31,28 @@ type TopClicksPhraseModel struct {
 	GroupID  int `json:"group_id"`
 }
 
+type ClickTrendsResponse struct {
+	Time   string `json:"time"`
+	Clicks int    `json:"clicks"`
+}
+
+type ClickTrendsCacheProvider struct {
+	db                *gorm.DB
+	cachedClickTrends []ClickTrendsResponse
+	mu                sync.RWMutex
+}
+
+func NewClickTrendsCacheProvider(db *gorm.DB) *ClickTrendsCacheProvider {
+	clickTrendsCache := &ClickTrendsCacheProvider{
+		db:                db,
+		cachedClickTrends: make([]ClickTrendsResponse, 0, 100),
+	}
+
+	go periodUpdateClickTrendsCache(clickTrendsCache)
+
+	return clickTrendsCache
+}
+
 func NewPhrasesCacheProvider(db *gorm.DB) *PhrasesCacheProvider {
 	phraseCache := &PhrasesCacheProvider{
 		db:            db,
@@ -262,8 +284,35 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	cp.mu.Unlock()
 }
 
+func (ct *ClickTrendsCacheProvider) GetClickTrends() []ClickTrendsResponse {
+	return ct.cachedClickTrends
+}
+
 func periodUpdateCache(cache *PhrasesCacheProvider) {
 	ticker := time.NewTicker(3 * time.Second)
+	for {
+		<-ticker.C
+		cache.updateCache()
+	}
+}
+
+func (ct *ClickTrendsCacheProvider) updateCache() {
+	var clickTrendsRecords []ClickTrendsResponse
+	start := time.Now()
+	if err := ct.db.Debug().Raw("SELECT FROM_UNIXTIME(floor(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY floor(click_time/600) order by time;").Scan(&clickTrendsRecords).Error; err != nil {
+		zap.L().Sugar().Error("Error! Get click trends failed: ", err)
+		return
+	}
+
+	zap.L().Sugar().Infof("update click trends cache cost: %v", time.Since(start))
+
+	ct.mu.Lock()
+	ct.cachedClickTrends = clickTrendsRecords
+	ct.mu.Unlock()
+}
+
+func periodUpdateClickTrendsCache(cache *ClickTrendsCacheProvider) {
+	ticker := time.NewTicker(10 * time.Second)
 	for {
 		<-ticker.C
 		cache.updateCache()
