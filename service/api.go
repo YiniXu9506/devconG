@@ -579,7 +579,7 @@ func (s *Service) TestPhrasePostHandler(c *gin.Context) {
 	// start := time.Now()
 
 	if err := s.db.Table("phrase_models").
-		Create(&model.PhraseModel{Text: newPhrase.Text, OpenID: newPhrase.OpenID, GroupID: newPhrase.GroupID, Status: 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()}).Error; err != nil {
+		Create(&model.PhraseModel{Text: newPhrase.Text, OpenID: newPhrase.OpenID, GroupID: newPhrase.GroupID, Status: rand.Intn(3) + 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()}).Error; err != nil {
 		mysqlErr := &mysql.MySQLError{}
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -810,5 +810,31 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 }
 
 func (s *Service) GetClickTrendsHandler(c *gin.Context) {
+	type clickTrendsModel struct {
+		Time   string `json:"time"`
+		Clicks int    `json:"clicks"`
+	}
 
+	var clickTrendsResp []clickTrendsModel
+	var currentTimeClicks clickTrendsModel
+
+	if err := s.db.Debug().Raw("SELECT FROM_UNIXTIME(ceiling(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY ceiling(click_time/600) order by time;").Scan(&clickTrendsResp).Error; err != nil {
+		zap.L().Sugar().Error("Error! Get click trends failed: ", err)
+		return
+	}
+
+	if err := s.db.Debug().Raw("SELECT FROM_UNIXTIME(floor(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY floor(click_time/600) order by time;").Scan(&clickTrendsResp).Error; err != nil {
+		zap.L().Sugar().Error("Error! Get click trends failed: ", err)
+		return
+	}
+
+	fmt.Printf("clickTrendsResp %v", clickTrendsResp)
+
+	clickTrendsResp = append(clickTrendsResp, currentTimeClicks)
+
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": clickTrendsResp,
+		"m": "",
+	})
 }

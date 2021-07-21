@@ -10,14 +10,15 @@ import (
 )
 
 func MockPhraseClick(n int, db *gorm.DB) {
+	t := time.Now().Add(-time.Duration(n) * time.Minute)
 	for i := 1; i <= n; i++ {
 		phraseClick := PhraseClickModel{
 			ID:        i,
 			GroupID:   rand.Intn(5) + 1,
 			OpenID:    fmt.Sprintf("%d", (rand.Intn(5)+1)*100),
-			PhraseID:  i,
+			PhraseID:  rand.Intn(50) + 1,
 			Clicks:    rand.Intn(5) + 1,
-			ClickTime: time.Now().Unix(),
+			ClickTime: t.Add(time.Duration(i) * time.Minute).Unix(),
 		}
 
 		db.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(&phraseClick)

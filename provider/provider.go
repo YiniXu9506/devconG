@@ -92,7 +92,7 @@ func CacheNPhrases(id int, cp *PhrasesCacheProvider, c chan ScrollingPhrasesResp
 	defer func() {
 		c <- phrase
 	}()
-	if err := cp.db.Debug().Table("phrase_models").
+	if err := cp.db.Table("phrase_models").
 		Select("phrase_id, text, group_id").
 		Where("phrase_id = ?", id).
 		Find(&phraseRecord).Error; err != nil {
@@ -101,7 +101,7 @@ func CacheNPhrases(id int, cp *PhrasesCacheProvider, c chan ScrollingPhrasesResp
 	}
 
 	// find out phrase click distributions
-	if err := cp.db.Debug().Table("phrase_click_models").
+	if err := cp.db.Table("phrase_click_models").
 		Select("sum(clicks) as clicks, phrase_id, group_id").
 		Where("phrase_id = ?", id).
 		Group("phrase_id, group_id").
@@ -124,7 +124,7 @@ func CacheNPhrases(id int, cp *PhrasesCacheProvider, c chan ScrollingPhrasesResp
 		topClickGroup.GroupID = phraseClicksDistribution[0].GroupID
 
 		// update phrase show time
-		if err := cp.db.Debug().Table("phrase_models").
+		if err := cp.db.Table("phrase_models").
 			Where("phrase_id = ?", id).
 			Update("update_time", time.Now().Unix()).Error; err != nil {
 			zap.L().Sugar().Error("Error! Update phrase interactive time: ", err)
@@ -165,7 +165,7 @@ func getTopNPhrase(db *gorm.DB, topNPhrasesCount int, c chan []TopClicksPhraseMo
 		c <- topClicksPhrases
 	}()
 
-	if err := db.Debug().Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
+	if err := db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
 		Scan(&topClicksPhrases).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get top N clicks phrases: ", err)
 		return
@@ -200,7 +200,7 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	var reviewedPhraseCount int
 	limit := 30
 
-	if err := cp.db.Debug().Raw("Select count(*) from phrase_models where status=2").
+	if err := cp.db.Raw("Select count(*) from phrase_models where status=2").
 		Find(&reviewedPhraseCount).Error; err != nil {
 		zap.L().Sugar().Error("Error! Select reviewed phrases counts: ", err)
 		return
