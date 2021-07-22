@@ -723,11 +723,11 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 		})
 		return
 	}
-	// t := time.Now().Add(-time.Duration(40) * time.Minute)
+	t := time.Now().Add(-time.Duration(40) * time.Minute)
 
 	// if find the reviewed phrase exist in phrase_models, then insert the click stats
 	if phraseRecordRe.RowsAffected > 0 {
-		if err := s.db.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now().Unix()}).Error; err != nil {
+		if err := s.db.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: t.Add(time.Duration(-30) * time.Minute).Unix()}).Error; err != nil {
 			zap.L().Sugar().Error("Error! Failed to update phrase click model: ", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"c": 1,
@@ -872,7 +872,7 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 
 	var totalClicks int
 	if err := s.db.Debug().Table("phrase_click_models").
-		Select("count(*)").
+		Select("sum(clicks)").
 		Find(&totalClicks).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get total clicks failed: ", err)
 		return
@@ -900,44 +900,40 @@ func (s *Service) GetClickTrendsHandler(c *gin.Context) {
 
 	var clickTrendsRecords, clickTrendsResp []clickTrendsModel
 
-	if err := s.db.Debug().Raw("SELECT time, sum(clicks) over (partition by gid order by time) as clicks from  (SELECT 1 as gid, ceiling(click_time/600)*600 as time, sum(clicks) as clicks FROM phrase_click_models GROUP BY ceiling(click_time/600)) as t;").Scan(&clickTrendsRecords).Error; err != nil {
+	if err := s.db.Debug().Raw("select time, agg_clicks as clicks from (SELECT *, sum(clicks) over (partition by gid order by time) as agg_clicks from  (SELECT 1 as gid, ceiling(click_time/600)*600 as time, sum(clicks) as clicks FROM phrase_click_models GROUP BY  ceiling(click_time/600)) as t ) as tt WHERE tt.time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR);").Scan(&clickTrendsRecords).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get click trends failed: ", err)
 		return
 	}
 
-	t := time.Now().Add(-time.Duration(100) * time.Minute)
+	t := time.Now().Add(-time.Duration(170) * time.Minute)
 
 	timeArr := make([]int64, 18)
 
 	for i := 0; i < 18; i++ {
-		timeArr[i] = t.Add(time.Duration(i)*time.Minute).Unix() / 600 * 600
+		timeArr[i] = t.Add(time.Duration(10*(i+1))*time.Minute).Unix() / 600 * 600
 	}
 
-	fmt.Printf("time %v\n", timeArr)
-
-	for _, resp := range clickTrendsRecords {
-		fmt.Printf("list %v, %v\n", resp.Time, resp.Clicks)
-		if resp.Time > t.Unix() {
-			for i, t := range timeArr {
-				var temp clickTrendsModel
-				fmt.Printf("resp ===== %v\n", resp.Time)
-				if t == resp.Time {
-					fmt.Printf("t===== %v\n", t)
-					temp = clickTrendsModel{
-						Time:   resp.Time,
-						Clicks: resp.Clicks,
-					}
-				} else {
-					fmt.Printf("no===== %v\n", t)
-					temp = clickTrendsModel{
-						Time:   t,
-						Clicks: clickTrendsResp[i-1].Clicks,
-					}
-				}
-				clickTrendsResp = append(clickTrendsResp, temp)
-			}
-
+	for i, t := range timeArr {
+		trend := clickTrendsModel{
+			Time:   t,
+			Clicks: 0,
 		}
+		if i != 0 {
+			trend.Clicks = clickTrendsResp[i-1].Clicks
+		} else {
+			var total int
+			s.db.Debug().Raw(fmt.Sprintf("select sum(clicks) from phrase_click_models where click_time < %d", t)).First(&total)
+			trend.Clicks = total
+		}
+
+		for _, resp := range clickTrendsRecords {
+			if resp.Time == t {
+				trend.Clicks = resp.Clicks
+				break
+			}
+		}
+
+		clickTrendsResp = append(clickTrendsResp, trend)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
