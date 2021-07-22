@@ -21,6 +21,8 @@ var config *viper.Viper
 var configFileName = flag.String("f", "config", "customize the filename.")
 var hostName = flag.String("h", "127.0.0.1", "Connect to host.")
 var port = flag.Int("P", 4000, "the database ports.")
+var cloudHostName = flag.String("ch", "", "Connect to host.")
+var cloudPort = flag.Int("CP", 0, "the database ports.")
 var serverPort = flag.Int("l", 8080, "Port number listenling.")
 
 func initConfigure(configFileName string) *viper.Viper {
@@ -63,8 +65,8 @@ func main() {
 	//r.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
 	r.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
-	db := utils.TiDBConnect(*hostName, *port)
-	service := service.NewService(db, config)
+	dbs := utils.TiDBConnect(*hostName, *port, *cloudHostName, *cloudPort)
+	service := service.NewService(dbs, config)
 	service.Start(r)
 
 	r.Run(fmt.Sprintf(":%d", *serverPort))

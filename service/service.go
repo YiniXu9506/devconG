@@ -8,21 +8,30 @@ import (
 )
 
 type Service struct {
-	db                       *gorm.DB
-	phraseCacheProvider      *provider.PhrasesCacheProvider
-	clickTrendsCacheProvider *provider.ClickTrendsCacheProvider
-	config                   *viper.Viper
+	db                  *gorm.DB
+	cdb                 *gorm.DB
+	phraseCacheProvider *provider.PhrasesCacheProvider
+	// clickTrendsCacheProvider *provider.ClickTrendsCacheProvider
+	config *viper.Viper
 }
 
-func NewService(db *gorm.DB, config *viper.Viper) *Service {
+func NewService(dbs []*gorm.DB, config *viper.Viper) *Service {
+	var db, cdb *gorm.DB
+	if len(dbs) > 0 {
+		db = dbs[0]
+		if len(dbs) == 2 {
+			cdb = dbs[1]
+		}
+	}
 	phraseCacheProvider := provider.NewPhrasesCacheProvider(db)
-	clickTrendsCacheProvider := provider.NewClickTrendsCacheProvider(db)
+	// clickTrendsCacheProvider := provider.NewClickTrendsCacheProvider(db)
 
 	return &Service{
-		db:                       db,
-		phraseCacheProvider:      phraseCacheProvider,
-		clickTrendsCacheProvider: clickTrendsCacheProvider,
-		config:                   config,
+		db:                  db,
+		cdb:                 cdb,
+		phraseCacheProvider: phraseCacheProvider,
+		// clickTrendsCacheProvider: clickTrendsCacheProvider,
+		config: config,
 	}
 }
 

@@ -37,3 +37,6 @@ CREATE TABLE `user_models` (
 参考：https://blog.csdn.net/yalishadaa/article/details/72861737
 */
 set @@global.sql_mode="STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
+
+
+SELECT *, sum(clicks) over (partition by gid order by time) as agg_clicks from  (SELECT 1 as gid, ceiling(click_time/600)*600 as time, sum(clicks) as clicks FROM phrase_click_models GROUP BY  ceiling(click_time/600)) as t  WHERE time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR);

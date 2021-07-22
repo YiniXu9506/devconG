@@ -131,7 +131,15 @@ func (s *Service) AddPhraseHandler(c *gin.Context) {
 		}
 		return
 	}
-
+	if s.cdb != nil {
+		if err := s.cdb.Table("phrase_models").
+			Create(&model.PhraseModel{Text: req.Text, OpenID: req.OpenID, GroupID: req.GroupID, Status: 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()}).Error; err != nil {
+			mysqlErr := &mysql.MySQLError{}
+			if mysqlErr != nil {
+				zap.L().Sugar().Error("write to cdb failed", zap.Error(mysqlErr))
+			}
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": "",
@@ -191,6 +199,18 @@ func (s *Service) UpdateClickedPhraseHandler(c *gin.Context) {
 				})
 				return
 			}
+
+			if s.cdb != nil {
+				if err := s.cdb.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now().Unix()}).Error; err != nil {
+					zap.L().Sugar().Error("Error! Failed to update phrase click model: ", err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"c": 1,
+						"d": "",
+						"m": err.Error(),
+					})
+					return
+				}
+			}
 		}
 	}
 
@@ -230,6 +250,27 @@ func (s *Service) AddUserHandler(c *gin.Context) {
 			})
 		}
 		return
+	}
+
+	if s.cdb != nil {
+		if err := s.cdb.Table("user_models").
+			Create(&model.UserModel{OpenID: req.OpenID, NickName: req.NickName, Sex: req.Sex, Province: req.Province, City: req.City, HeadImgURL: req.HeadImgURL}).Error; err != nil {
+			mysqlErr := &mysql.MySQLError{}
+			if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+				c.JSON(http.StatusOK, gin.H{
+					"c": 0,
+					"d": "",
+					"m": "",
+				})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"c": 1,
+					"d": "",
+					"m": err.Error(),
+				})
+			}
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -464,6 +505,31 @@ func (s *Service) DeletePhraseHandler(c *gin.Context) {
 		return
 	}
 
+	if s.cdb != nil {
+		deletePhraseRes := s.cdb.Table("phrase_models").
+			Where("phrase_id = ?", req.PhraseID).
+			Updates(map[string]interface{}{"status": 3, "update_time": time.Now().Unix()})
+
+		if deletePhraseRes.Error != nil {
+			zap.L().Sugar().Error("Error! Delete phrase: ", deletePhraseRes.Error)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"c": 1,
+				"d": "",
+				"m": deletePhraseRes.Error.Error(),
+			})
+			return
+		}
+
+		if deletePhraseRes.RowsAffected == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"c": 11001,
+				"d": "",
+				"m": "Nonexistent",
+			})
+			return
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": "",
@@ -537,6 +603,20 @@ func (s *Service) PatchPhraseHandler(c *gin.Context) {
 				"m": err.Error(),
 			})
 			return
+		}
+
+		if s.cdb != nil {
+			if err := s.cdb.Table("phrase_models").
+				Where("phrase_id = ?", req.PhraseID).
+				Updates(updates).Error; err != nil {
+				zap.L().Sugar().Error("Error! Update phrase text or status", err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"c": 1,
+					"d": "",
+					"m": err.Error(),
+				})
+				return
+			}
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -627,6 +707,8 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 	open_id := newPhraseClick.OpenID
 	group_id := newPhraseClick.GroupID
 
+	fmt.Printf("phrase id: %v", phrase_id)
+
 	// start := time.Now()
 
 	// check validation of phrase in phrase_models
@@ -641,6 +723,7 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 		})
 		return
 	}
+	// t := time.Now().Add(-time.Duration(40) * time.Minute)
 
 	// if find the reviewed phrase exist in phrase_models, then insert the click stats
 	if phraseRecordRe.RowsAffected > 0 {
@@ -676,7 +759,7 @@ func (s *Service) TestUserPostHandler(c *gin.Context) {
 		OpenID:     string(str),
 		NickName:   string(str),
 		Sex:        rand.Intn(2) + 1,
-		Province:   fmt.Sprintf("province%d", rand.Intn(10)),
+		Province:   "广州",
 		City:       string(str),
 		HeadImgURL: string(str),
 	}
@@ -751,7 +834,7 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 	if err := s.db.Debug().Table("user_models").
 		Select("province, count(*) as count").
 		Group("province").
-		Order("count desc").
+		Order("count desc, province desc").
 		Limit(5).
 		Find(&locationsRecords).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get user distrbution failed: ", err)
@@ -782,7 +865,7 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 	if err := s.db.Debug().Table("phrase_models").
 		Select("count(*)").
 		Where("status = ?", 2).
-		Find(&totalUser).Error; err != nil {
+		Find(&totalValidPhrase).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get total valid phrase failed: ", err)
 		return
 	}
@@ -810,42 +893,52 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 }
 
 func (s *Service) GetClickTrendsHandler(c *gin.Context) {
-
 	type clickTrendsModel struct {
-		Time   string `json:"time"`
-		Clicks int    `json:"clicks"`
+		Time   int64 `json:"time"`
+		Clicks int   `json:"clicks"`
 	}
 
-	// var clickTrendsResp []clickTrendsModel
-	// var currentTimeClicks clickTrendsModel
+	var clickTrendsRecords, clickTrendsResp []clickTrendsModel
 
-	// if err := s.db.Debug().Raw("SELECT FROM_UNIXTIME(ceiling(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY ceiling(click_time/600) order by time;").Scan(&clickTrendsResp).Error; err != nil {
-	// 	zap.L().Sugar().Error("Error! Get click trends failed: ", err)
-	// 	return
-	// }
-
-	// if err := s.db.Debug().Raw("SELECT FROM_UNIXTIME(floor(click_time/600)*600, '%T') as time, sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR) GROUP BY floor(click_time/600) order by time;").Scan(&clickTrendsResp).Error; err != nil {
-	// 	zap.L().Sugar().Error("Error! Get click trends failed: ", err)
-	// 	return
-	// }
-
-	// fmt.Printf("clickTrendsResp %v", clickTrendsResp)
-
-	// clickTrendsResp = append(clickTrendsResp, currentTimeClicks)
-
-	clickTrendsResp := s.clickTrendsCacheProvider.GetClickTrends()
-
-	var clicks int
-	if err := s.db.Debug().Raw("SELECT sum(clicks) as clicks FROM phrase_click_models WHERE click_time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR)").Scan(&clicks).Error; err != nil {
+	if err := s.db.Debug().Raw("SELECT time, sum(clicks) over (partition by gid order by time) as clicks from  (SELECT 1 as gid, ceiling(click_time/600)*600 as time, sum(clicks) as clicks FROM phrase_click_models GROUP BY ceiling(click_time/600)) as t;").Scan(&clickTrendsRecords).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get click trends failed: ", err)
 		return
 	}
 
-	// currentTotalClicks := clickTrendsModel{
-	// 	Time: FROM_UNIXTIME(time.Now().Unix(), "%T"),
-	// }
+	t := time.Now().Add(-time.Duration(100) * time.Minute)
 
-	// fmt.Printf("currentTotalClicks %v\n", currentTotalClicks)
+	timeArr := make([]int64, 18)
+
+	for i := 0; i < 18; i++ {
+		timeArr[i] = t.Add(time.Duration(i)*time.Minute).Unix() / 600 * 600
+	}
+
+	fmt.Printf("time %v\n", timeArr)
+
+	for _, resp := range clickTrendsRecords {
+		fmt.Printf("list %v, %v\n", resp.Time, resp.Clicks)
+		if resp.Time > t.Unix() {
+			for i, t := range timeArr {
+				var temp clickTrendsModel
+				fmt.Printf("resp ===== %v\n", resp.Time)
+				if t == resp.Time {
+					fmt.Printf("t===== %v\n", t)
+					temp = clickTrendsModel{
+						Time:   resp.Time,
+						Clicks: resp.Clicks,
+					}
+				} else {
+					fmt.Printf("no===== %v\n", t)
+					temp = clickTrendsModel{
+						Time:   t,
+						Clicks: clickTrendsResp[i-1].Clicks,
+					}
+				}
+				clickTrendsResp = append(clickTrendsResp, temp)
+			}
+
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,

@@ -10,7 +10,7 @@ import (
 )
 
 func MockPhraseClick(n int, db *gorm.DB) {
-	t := time.Now().Add(-time.Duration(n) * time.Minute)
+	t := time.Now().Add(-time.Duration(100) * time.Minute)
 	for i := 1; i <= n; i++ {
 		phraseClick := PhraseClickModel{
 			ID:        i,
@@ -54,7 +54,7 @@ func MockUser(n int, db *gorm.DB) {
 			OpenID:     string(str),
 			NickName:   string(str),
 			Sex:        rand.Intn(2) + 1,
-			Province:   fmt.Sprintf("province%d", rand.Intn(10)+1),
+			Province:   "广州",
 			City:       string(str),
 			HeadImgURL: string(str),
 		}
