@@ -62,6 +62,8 @@ func phraseDistribution(distributions []distributionModel) []distributionModel {
 	return distributions
 }
 
+var token = "XVlBzgbaiCMRAjWwhTHctcuAxhxKQF"
+
 // return phrases to wechat
 func (s *Service) GetScrollingPhrasesHandler(c *gin.Context) {
 	const defaultLimit = "100"
@@ -133,15 +135,6 @@ func (s *Service) AddPhraseHandler(c *gin.Context) {
 		}
 		return
 	}
-	if s.cdb != nil {
-		if err := s.cdb.Table("phrase_models").
-			Create(&model.PhraseModel{Text: req.Text, OpenID: req.OpenID, GroupID: req.GroupID, Status: 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()}).Error; err != nil {
-			mysqlErr := &mysql.MySQLError{}
-			if mysqlErr != nil {
-				zap.L().Sugar().Error("write to cdb failed", zap.Error(mysqlErr))
-			}
-		}
-	}
 
 	zap.L().Sugar().Infof("add new phrase cost: %v", time.Since(start))
 	c.JSON(http.StatusOK, gin.H{
@@ -205,18 +198,6 @@ func (s *Service) UpdateClickedPhraseHandler(c *gin.Context) {
 				})
 				return
 			}
-
-			if s.cdb != nil {
-				if err := s.cdb.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now().Unix()}).Error; err != nil {
-					zap.L().Sugar().Error("Error! Failed to update phrase click model: ", err)
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"c": 1,
-						"d": "",
-						"m": err.Error(),
-					})
-					return
-				}
-			}
 		}
 	}
 
@@ -258,27 +239,6 @@ func (s *Service) AddUserHandler(c *gin.Context) {
 		return
 	}
 
-	if s.cdb != nil {
-		if err := s.cdb.Table("user_models").
-			Create(&model.UserModel{OpenID: req.OpenID, NickName: req.NickName, Sex: req.Sex, Province: req.Province, City: req.City, HeadImgURL: req.HeadImgURL}).Error; err != nil {
-			mysqlErr := &mysql.MySQLError{}
-			if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
-				c.JSON(http.StatusOK, gin.H{
-					"c": 0,
-					"d": "",
-					"m": "",
-				})
-			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"c": 1,
-					"d": "",
-					"m": err.Error(),
-				})
-			}
-			return
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": "",
@@ -288,6 +248,18 @@ func (s *Service) AddUserHandler(c *gin.Context) {
 
 // get all phrases
 func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
+	reqToken := c.Request.Header.Get("token")
+
+	if reqToken != token {
+		c.JSON(http.StatusOK, gin.H{
+			"c": -1,
+			"d": "",
+			"m": "invalid token",
+		})
+
+		return
+	}
+
 	defaultLimit := "50"
 	defaultOffset := "0"
 	defaultStatus := "1,2"
@@ -391,6 +363,18 @@ func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
 
 // get top-N phrases
 func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
+	reqToken := c.Request.Header.Get("token")
+
+	if reqToken != token {
+		c.JSON(http.StatusOK, gin.H{
+			"c": -1,
+			"d": "",
+			"m": "invalid token",
+		})
+
+		return
+	}
+
 	defaultLimit := "5"
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
 
@@ -409,7 +393,7 @@ func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
 	start := time.Now()
 
 	// get top N phrases, which are reviewed
-	if err := s.db.Raw("SELECT a.phrase_id, SUM(clicks) as clicks, b.status FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id WHERE b.status = 2 GROUP BY a.phrase_id ORDER BY clicks desc limit @limit", sql.Named("limit", limit)).
+	if err := s.db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_models as a INNER JOIN phrase_click_models as b ON a.phrase_id = b.phrase_id and a.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", limit)).
 		Find(&topPhraseIDs).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get top N phrases, which are reviewed: ", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -472,6 +456,18 @@ func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
 
 // delete phrase by change status to 3
 func (s *Service) DeletePhraseHandler(c *gin.Context) {
+	reqToken := c.Request.Header.Get("token")
+
+	if reqToken != token {
+		c.JSON(http.StatusOK, gin.H{
+			"c": -1,
+			"d": "",
+			"m": "invalid token",
+		})
+
+		return
+	}
+
 	type phraseIDRequest struct {
 		PhraseID int `form:"id" json:"id" binding:"required"`
 	}
@@ -513,31 +509,6 @@ func (s *Service) DeletePhraseHandler(c *gin.Context) {
 		return
 	}
 
-	if s.cdb != nil {
-		deletePhraseRes := s.cdb.Table("phrase_models").
-			Where("phrase_id = ?", req.PhraseID).
-			Updates(map[string]interface{}{"status": 3, "update_time": time.Now().Unix()})
-
-		if deletePhraseRes.Error != nil {
-			zap.L().Sugar().Error("Error! Delete phrase: ", deletePhraseRes.Error)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"c": 1,
-				"d": "",
-				"m": deletePhraseRes.Error.Error(),
-			})
-			return
-		}
-
-		if deletePhraseRes.RowsAffected == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"c": 11001,
-				"d": "",
-				"m": "Nonexistent",
-			})
-			return
-		}
-	}
-
 	zap.L().Sugar().Infof("delete phrase cost: %v", time.Since(start))
 
 	c.JSON(http.StatusOK, gin.H{
@@ -549,6 +520,18 @@ func (s *Service) DeletePhraseHandler(c *gin.Context) {
 
 // update phrase text or status
 func (s *Service) PatchPhraseHandler(c *gin.Context) {
+	reqToken := c.Request.Header.Get("token")
+
+	if reqToken != token {
+		c.JSON(http.StatusOK, gin.H{
+			"c": -1,
+			"d": "",
+			"m": "invalid token",
+		})
+
+		return
+	}
+
 	type patchPhraseReq struct {
 		PhraseID int    `form:"id" json:"id" binding:"required"`
 		Text     string `form:"text" json:"text"`
@@ -614,21 +597,67 @@ func (s *Service) PatchPhraseHandler(c *gin.Context) {
 			})
 			return
 		}
+	}
 
-		if s.cdb != nil {
-			if err := s.cdb.Table("phrase_models").
-				Where("phrase_id = ?", req.PhraseID).
-				Updates(updates).Error; err != nil {
-				zap.L().Sugar().Error("Error! Update phrase text or status", err)
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"c": 1,
-					"d": "",
-					"m": err.Error(),
-				})
-				return
-			}
+	c.JSON(http.StatusOK, gin.H{
+		"c": 0,
+		"d": "",
+		"m": "",
+	})
+}
+
+// batch update reviewed phrase
+func (s *Service) PatchBatchPhraseHandler(c *gin.Context) {
+	reqToken := c.Request.Header.Get("token")
+
+	if reqToken != token {
+		c.JSON(http.StatusOK, gin.H{
+			"c": -1,
+			"d": "",
+			"m": "invalid token",
+		})
+
+		return
+	}
+
+	type batchReviewPhraseReq struct {
+		PhraseID []int `form:"ids" json:"ids" binding:"required"`
+		Status   int   `form:"status" json:"status" binding:"required"`
+	}
+
+	var req batchReviewPhraseReq
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"c": 2,
+			"d": "",
+			"m": "phrase_id and status are required!",
+		})
+		return
+	}
+
+	// batch review phrase
+	selectPhrasesWithStatus := 1
+	updateStatusTo := 2
+
+	// batch delete pharse
+	if req.Status == 3 {
+		selectPhrasesWithStatus = 2
+		updateStatusTo = 3
+	}
+
+	if req.Status == 2 || req.Status == 3 {
+		if err := s.db.Table("phrase_models").Where("status = ? AND phrase_id IN ?", selectPhrasesWithStatus, req.PhraseID).Updates(map[string]interface{}{"status": updateStatusTo, "update_time": time.Now().Unix()}).Error; err != nil {
+			zap.L().Sugar().Error("Error! Update phrase text or status", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"c": 1,
+				"d": "",
+				"m": err.Error(),
+			})
+			return
 		}
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": "",
@@ -705,7 +734,7 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 	}
 
 	newPhraseClick := phraseClick{
-		PhraseID: rand.Intn(50) + 1,
+		PhraseID: rand.Intn(10000000) + 1,
 		GroupID:  rand.Intn(5) + 1,
 		OpenID:   fmt.Sprintf("%d", (rand.Intn(5)+1)*100),
 		Clicks:   rand.Intn(5) + 1,
@@ -716,8 +745,6 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 	clicks := newPhraseClick.Clicks
 	open_id := newPhraseClick.OpenID
 	group_id := newPhraseClick.GroupID
-
-	fmt.Printf("phrase id: %v", phrase_id)
 
 	// start := time.Now()
 
@@ -733,11 +760,10 @@ func (s *Service) TestPhraseHotPostHandler(c *gin.Context) {
 		})
 		return
 	}
-	t := time.Now().Add(-time.Duration(40) * time.Minute)
 
 	// if find the reviewed phrase exist in phrase_models, then insert the click stats
 	if phraseRecordRe.RowsAffected > 0 {
-		if err := s.db.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: t.Add(time.Duration(-30) * time.Minute).Unix()}).Error; err != nil {
+		if err := s.db.Create(&model.PhraseClickModel{PhraseID: phrase_id, Clicks: clicks, OpenID: open_id, GroupID: group_id, ClickTime: time.Now().Unix()}).Error; err != nil {
 			zap.L().Sugar().Error("Error! Failed to update phrase click model: ", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"c": 1,

@@ -54,7 +54,7 @@ func TiDBConnect(hostName string, port int, cloudHostName string, cloudPort int)
 		sqlDB.SetMaxIdleConns(10)
 
 		// SetMaxOpenConns sets the maximum number of open connections to the database.
-		sqlDB.SetMaxOpenConns(1000)
+		sqlDB.SetMaxOpenConns(500)
 
 		// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 		sqlDB.SetConnMaxLifetime(time.Hour)

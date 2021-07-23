@@ -143,7 +143,7 @@ func getNewestNPhrase(db *gorm.DB, newestPhrasesCount int, c chan []model.Phrase
 	// get newest-N phrases
 	if err := db.Table("phrase_models").
 		Where("status = ?", 2).
-		Order("update_time").
+		Order("update_time desc").
 		Limit(newestPhrasesCount).
 		Find(&newestPhrases).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get newest-N phrases: ", err)
@@ -157,7 +157,7 @@ func getTopNPhrase(db *gorm.DB, topNPhrasesCount int, c chan []TopClicksPhraseMo
 		c <- topClicksPhrases
 	}()
 
-	if err := db.Debug().Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_models as a INNER JOIN phrase_clicks_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
+	if err := db.Debug().Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_models as a INNER JOIN phrase_click_models as b ON a.phrase_id = b.phrase_id and a.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
 		Scan(&topClicksPhrases).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get top N clicks phrases: ", err)
 		return
