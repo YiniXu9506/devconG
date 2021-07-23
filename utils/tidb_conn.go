@@ -35,7 +35,7 @@ func TiDBConnect(hostName string, port int, cloudHostName string, cloudPort int)
 	dbs = append(dbs, db)
 	if len(cloudHostName) > 0 && cloudPort > 0 {
 		fmt.Println("use cloud database", db2DSN)
-		cloudDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: newLogger})
+		cloudDB, err := gorm.Open(mysql.Open(db2DSN), &gorm.Config{Logger: newLogger})
 		if err != nil {
 			panic(fmt.Sprintf("failed to connect database %v", err))
 		}
@@ -59,11 +59,11 @@ func TiDBConnect(hostName string, port int, cloudHostName string, cloudPort int)
 		// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 		sqlDB.SetConnMaxLifetime(time.Hour)
 		// start = time.Now()
-		model.MockPhraseClick(10, db)
+		// model.MockPhraseClick(10, db)
 
-		model.MockPhrase(50, db)
+		// model.MockPhrase(50, db)
 
-		model.MockUser(5, db)
+		// model.MockUser(5, db)
 
 		// zap.L().Sugar().Infof("mock cost: %v\n", time.Since(start))
 	}

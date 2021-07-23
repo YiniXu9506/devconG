@@ -113,6 +113,8 @@ func (s *Service) AddPhraseHandler(c *gin.Context) {
 		return
 	}
 
+	start := time.Now()
+
 	if err := s.db.Table("phrase_models").
 		Create(&model.PhraseModel{Text: req.Text, OpenID: req.OpenID, GroupID: req.GroupID, Status: 1, CreateTime: time.Now().Unix(), UpdateTime: time.Now().Unix()}).Error; err != nil {
 		mysqlErr := &mysql.MySQLError{}
@@ -140,6 +142,8 @@ func (s *Service) AddPhraseHandler(c *gin.Context) {
 			}
 		}
 	}
+
+	zap.L().Sugar().Infof("add new phrase cost: %v", time.Since(start))
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
 		"d": "",
@@ -167,6 +171,8 @@ func (s *Service) UpdateClickedPhraseHandler(c *gin.Context) {
 		})
 		return
 	}
+
+	// start := time.Now()
 
 	for _, phrase := range req {
 		var phraseRecord model.PhraseModel
@@ -309,7 +315,7 @@ func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
 
 	var phraseTotalCount int
 
-	// start := time.Now()
+	start := time.Now()
 
 	// get total counts of phrases
 	if err := s.db.Table("phrase_models").
@@ -372,7 +378,7 @@ func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
 		allPhrasesWithDistributions = append(allPhrasesWithDistributions, phraseWithDistribution)
 	}
 
-	// zap.L().Sugar().Infof("get all phrases cost: %v", time.Since(start))
+	zap.L().Sugar().Infof("get all phrases cost: %v", time.Since(start))
 
 	allPhrasesResp.List = allPhrasesWithDistributions
 
@@ -400,7 +406,7 @@ func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
 	var topPhraseIDs []topPhraseID
 	var topNPhrasesWithDistributions []topNPhrasesWithDistribution
 
-	// start := time.Now()
+	start := time.Now()
 
 	// get top N phrases, which are reviewed
 	if err := s.db.Raw("SELECT a.phrase_id, SUM(clicks) as clicks, b.status FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id WHERE b.status = 2 GROUP BY a.phrase_id ORDER BY clicks desc limit @limit", sql.Named("limit", limit)).
@@ -455,7 +461,7 @@ func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
 		topNPhrasesWithDistributions = append(topNPhrasesWithDistributions, phraseWithDistribution)
 	}
 
-	// zap.L().Sugar().Infof("get top phrase cost: %v", time.Since(start))
+	zap.L().Sugar().Infof("get top phrase cost: %v", time.Since(start))
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
@@ -481,6 +487,8 @@ func (s *Service) DeletePhraseHandler(c *gin.Context) {
 		})
 		return
 	}
+
+	start := time.Now()
 
 	deletePhraseRes := s.db.Table("phrase_models").
 		Where("phrase_id = ?", req.PhraseID).
@@ -529,6 +537,8 @@ func (s *Service) DeletePhraseHandler(c *gin.Context) {
 			return
 		}
 	}
+
+	zap.L().Sugar().Infof("delete phrase cost: %v", time.Since(start))
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,
@@ -797,7 +807,7 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 		Count int `json:"count"`
 	}
 	var sexRecords []sexModel
-	if err := s.db.Debug().Table("user_models").
+	if err := s.db.Table("user_models").
 		Select("sex, count(*) as count").
 		Group("sex").
 		Find(&sexRecords).Error; err != nil {
@@ -831,7 +841,9 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 	}
 	var locationsRecords []locationModel
 
-	if err := s.db.Debug().Table("user_models").
+	start := time.Now()
+
+	if err := s.db.Table("user_models").
 		Select("province, count(*) as count").
 		Group("province").
 		Order("count desc, province desc").
@@ -846,12 +858,14 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 		top5LocationsCount += location.Count
 	}
 
-	otherLocations := locationModel{
-		Province: "其他",
-		Count:    totalUser - top5LocationsCount,
-	}
+	if top5LocationsCount > 0 {
+		otherLocations := locationModel{
+			Province: "其他",
+			Count:    totalUser - top5LocationsCount,
+		}
 
-	locationsRecords = append(locationsRecords, otherLocations)
+		locationsRecords = append(locationsRecords, otherLocations)
+	}
 
 	type responseModel struct {
 		TotalUser        int              `json:"total_users"`
@@ -862,7 +876,7 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 	}
 
 	var totalValidPhrase int
-	if err := s.db.Debug().Table("phrase_models").
+	if err := s.db.Table("phrase_models").
 		Select("count(*)").
 		Where("status = ?", 2).
 		Find(&totalValidPhrase).Error; err != nil {
@@ -870,17 +884,24 @@ func (s *Service) GetOverviewHandler(c *gin.Context) {
 		return
 	}
 
-	var totalClicks int
-	if err := s.db.Debug().Table("phrase_click_models").
-		Select("sum(clicks)").
-		Find(&totalClicks).Error; err != nil {
+	type sumClickModel struct {
+		Clicks int `json:"clicks"`
+	}
+
+	var totalClicks []sumClickModel
+	if err := s.db.Table("phrase_click_models").
+		Select("sum(clicks) as clicks").
+		Scan(&totalClicks).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get total clicks failed: ", err)
 		return
 	}
+
+	zap.L().Sugar().Infof("get overview cost: %v", time.Since(start))
 	var resp responseModel
 
 	resp.TotalUser = totalUser
-	resp.TotalClicks = totalClicks
+
+	resp.TotalClicks = totalClicks[0].Clicks
 	resp.TotalValidPhrase = totalValidPhrase
 	resp.Sex = sexRes
 	resp.Localtions = locationsRecords
@@ -900,7 +921,9 @@ func (s *Service) GetClickTrendsHandler(c *gin.Context) {
 
 	var clickTrendsRecords, clickTrendsResp []clickTrendsModel
 
-	if err := s.db.Debug().Raw("select time, agg_clicks as clicks from (SELECT *, sum(clicks) over (partition by gid order by time) as agg_clicks from  (SELECT 1 as gid, ceiling(click_time/600)*600 as time, sum(clicks) as clicks FROM phrase_click_models GROUP BY  ceiling(click_time/600)) as t ) as tt WHERE tt.time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR);").Scan(&clickTrendsRecords).Error; err != nil {
+	start := time.Now()
+
+	if err := s.db.Raw("select time, agg_clicks as clicks from (SELECT *, sum(clicks) over (partition by gid order by time) as agg_clicks from  (SELECT 1 as gid, ceiling(click_time/600)*600 as time, sum(clicks) as clicks FROM phrase_click_models GROUP BY  ceiling(click_time/600)) as t ) as tt WHERE tt.time > UNIX_TIMESTAMP(NOW() - INTERVAL 3 HOUR);").Scan(&clickTrendsRecords).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get click trends failed: ", err)
 		return
 	}
@@ -922,7 +945,7 @@ func (s *Service) GetClickTrendsHandler(c *gin.Context) {
 			trend.Clicks = clickTrendsResp[i-1].Clicks
 		} else {
 			var total int
-			s.db.Debug().Raw(fmt.Sprintf("select sum(clicks) from phrase_click_models where click_time < %d", t)).First(&total)
+			s.db.Raw(fmt.Sprintf("select sum(clicks) from phrase_click_models where click_time < %d", t)).First(&total)
 			trend.Clicks = total
 		}
 
@@ -935,6 +958,8 @@ func (s *Service) GetClickTrendsHandler(c *gin.Context) {
 
 		clickTrendsResp = append(clickTrendsResp, trend)
 	}
+
+	zap.L().Sugar().Infof("get click trends cost: %v", time.Since(start))
 
 	c.JSON(http.StatusOK, gin.H{
 		"c": 0,

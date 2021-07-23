@@ -2,6 +2,7 @@ package provider
 
 import (
 	"database/sql"
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -92,7 +93,7 @@ func CacheNPhrases(id int, cp *PhrasesCacheProvider, c chan ScrollingPhrasesResp
 	defer func() {
 		c <- phrase
 	}()
-	if err := cp.db.Table("phrase_models").
+	if err := cp.db.Debug().Table("phrase_models").
 		Select("phrase_id, text, group_id").
 		Where("phrase_id = ?", id).
 		Find(&phraseRecord).Error; err != nil {
@@ -101,11 +102,11 @@ func CacheNPhrases(id int, cp *PhrasesCacheProvider, c chan ScrollingPhrasesResp
 	}
 
 	// find out phrase click distributions
-	if err := cp.db.Table("phrase_click_models").
+	if err := cp.db.Debug().Table("phrase_click_models").
 		Select("sum(clicks) as clicks, phrase_id, group_id").
 		Where("phrase_id = ?", id).
 		Group("phrase_id, group_id").
-		Order("clicks").
+		Order("clicks desc").
 		Find(&phraseClicksDistribution).Error; err != nil {
 		zap.L().Sugar().Error("Error! Retrive top clicks group: ", err)
 		return
@@ -148,7 +149,6 @@ func getNewestNPhrase(db *gorm.DB, newestPhrasesCount int, c chan []model.Phrase
 		zap.L().Sugar().Error("Error! Get newest-N phrases: ", err)
 		return
 	}
-
 }
 
 func getTopNPhrase(db *gorm.DB, topNPhrasesCount int, c chan []TopClicksPhraseModel) {
@@ -157,7 +157,7 @@ func getTopNPhrase(db *gorm.DB, topNPhrasesCount int, c chan []TopClicksPhraseMo
 		c <- topClicksPhrases
 	}()
 
-	if err := db.Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_click_models as a LEFT JOIN phrase_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
+	if err := db.Debug().Raw("SELECT sum(clicks) as clicks, a.phrase_id FROM phrase_models as a INNER JOIN phrase_clicks_models as b ON a.phrase_id = b.phrase_id and b.status = 2 group by a.phrase_id order by clicks desc limit @limit", sql.Named("limit", topNPhrasesCount)).
 		Scan(&topClicksPhrases).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get top N clicks phrases: ", err)
 		return
@@ -170,7 +170,7 @@ func getRandomNPhrase(db *gorm.DB, randomNPhrasesCount int, c chan []model.Phras
 		c <- randomPickPhrases
 	}()
 
-	if err := db.Raw("SELECT * FROM phrase_models where status = 2 ORDER BY RAND() LIMIT ?", randomNPhrasesCount).
+	if err := db.Debug().Raw("SELECT * FROM phrase_models where status = 2 ORDER BY RAND() LIMIT ?", randomNPhrasesCount).
 		Scan(&randomPickPhrases).Error; err != nil {
 		zap.L().Sugar().Error("Error! Get random phrases: ", err)
 		return
@@ -199,6 +199,8 @@ func (cp *PhrasesCacheProvider) updateCache() {
 	}
 
 	newestPhrasesCount, topNPhrasesCount, limit := getReturnPhraseCount(limit, reviewedPhraseCount, cp.db)
+
+	fmt.Printf("count %v %v %v\n", newestPhrasesCount, topNPhrasesCount, limit)
 
 	// get newest-N phrases
 	go getNewestNPhrase(cp.db, newestPhrasesCount, newestNPhraseC)
