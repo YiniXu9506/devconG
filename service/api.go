@@ -363,18 +363,6 @@ func (s *Service) GetAllPhrasesHandler(c *gin.Context) {
 
 // get top-N phrases
 func (s *Service) GetTopNPhrasesHandler(c *gin.Context) {
-	reqToken := c.Request.Header.Get("token")
-
-	if reqToken != token {
-		c.JSON(http.StatusOK, gin.H{
-			"c": -1,
-			"d": "",
-			"m": "invalid token",
-		})
-
-		return
-	}
-
 	defaultLimit := "5"
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", defaultLimit))
 
